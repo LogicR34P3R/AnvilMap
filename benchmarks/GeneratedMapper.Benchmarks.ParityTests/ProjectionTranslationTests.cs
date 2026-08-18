@@ -8,9 +8,9 @@ using Microsoft.EntityFrameworkCore;
 
 namespace GeneratedMapper.Benchmarks.ParityTests;
 
-// The concrete, checkable version of docs/automapper-comparison.md's "true
-// SQL-translatable projection by construction" claim: capture each provider's generated
-// SQL for the graph fixture, and specifically check whether a [MapCondition] property
+// The concrete, checkable version of this project's "true SQL-translatable projection by
+// construction" claim: capture each provider's generated SQL for the graph fixture, and
+// specifically check whether a [MapCondition] property
 // leaks into AutoMapper's ProjectTo (which can't translate a runtime .Condition() clause)
 // the way GeneratedMapper's ProjectTo{Dest} avoids by construction (GM005: the property is
 // omitted from the projection entirely, not just left unconditioned).

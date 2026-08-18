@@ -6,8 +6,10 @@ namespace GeneratedMapper.Generator;
 // ElementDestinationType/DestinationCollectionShape only apply when Kind == Enumerable,
 // ConverterMethodName only when Kind == Converted, and so on. MappingResolver is careful to
 // only set the fields that apply to the Kind it's constructing; every switch over `Kind` in
-// MappingEmitter.*.cs implicitly depends on that discipline holding. See docs/roadmapv2.md
-// AD3 for the tradeoff around splitting this into a proper discriminated union instead.
+// MappingEmitter.*.cs implicitly depends on that discipline holding. A discriminated union
+// (a base type + one derived record per Kind) would make illegal states unrepresentable, at
+// the cost of turning every `Kind` switch in the emitter into a type-pattern match instead -
+// worth reconsidering once a fifth Kind is added, not proactively for the current four.
 internal sealed record PropertyMappingModel(
     string SourcePropertyName,
     string DestinationPropertyName,

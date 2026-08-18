@@ -10,19 +10,22 @@ namespace GeneratedMapper.Generator.Tests;
 
 internal static class GeneratorTestHelper
 {
-    private static readonly MetadataReference[] PlatformReferences =
+    // Exposed (not private) so tests that need to simulate a consumer compilation missing a
+    // given BCL type - e.g. FrozenDictionaryFallbackTests, which removes whichever assembly
+    // defines System.Collections.Frozen.FrozenDictionary to simulate a pre-.NET 8 consumer -
+    // can start from the same base reference set instead of duplicating this logic.
+    public static readonly MetadataReference[] PlatformReferences =
         ((string)AppContext.GetData("TRUSTED_PLATFORM_ASSEMBLIES")!)
             .Split(Path.PathSeparator)
             .Select(path => (MetadataReference)MetadataReference.CreateFromFile(path))
             .ToArray();
 
     public static GeneratorTestResult Run(string source)
+        => Run(source, PlatformReferences.Append(MetadataReference.CreateFromFile(typeof(MapToAttribute).Assembly.Location)).ToArray());
+
+    public static GeneratorTestResult Run(string source, MetadataReference[] references)
     {
         var syntaxTree = CSharpSyntaxTree.ParseText(source, new CSharpParseOptions(LanguageVersion.Latest));
-
-        var references = PlatformReferences
-            .Append(MetadataReference.CreateFromFile(typeof(MapToAttribute).Assembly.Location))
-            .ToArray();
 
         var compilation = CSharpCompilation.Create(
             "GeneratedMapper.Generator.Tests.Target",

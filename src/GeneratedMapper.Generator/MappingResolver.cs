@@ -154,7 +154,7 @@ internal static class MappingResolver
         // syntax, since a positional record's constructor requires its parameters) - that
         // whole mapping is skipped with GM006 rather than emitting code that won't compile.
         // Resolver deliberately does not attempt to match constructor parameters to properties
-        // for such destinations; see docs/roadmapv2.md F6 for that still-open gap.
+        // for such destinations (e.g. positional records) - a still-open gap, not implemented.
         var hasParameterlessConstructor = destination.InstanceConstructors
             .Any(c => c.Parameters.Length == 0);
 

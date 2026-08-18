@@ -10,15 +10,34 @@ namespace GeneratedMapper.Generator;
 // calling the statically-typed To{Dest}() extension method directly, since it skips this
 // dictionary lookup entirely (and participates in Find Usages/Rename, unlike a runtime
 // dispatch table). The map is built once, from a fixed compile-time-known mapping set, so a
-// FrozenDictionary (immutable, optimized for repeated lookups) is a strict improvement over a
-// regular Dictionary here - nothing is ever added to it after construction.
+// FrozenDictionary (immutable, optimized for repeated lookups) would be a strict improvement
+// over a regular Dictionary here - nothing is ever added to it after construction - but it only
+// exists on .NET 8+, so it's used when the consuming compilation can actually resolve it
+// (useFrozenDictionary, computed once in MappingSourceGenerator from that Compilation) and a
+// plain Dictionary otherwise. Same lookup semantics either way; only the field's declared type
+// and the trailing `.ToFrozenDictionary()` call differ.
 internal static partial class MappingEmitter
 {
     private static void EmitGenericDispatcher(
         StringBuilder sb,
-        IReadOnlyCollection<MappingModel> mappings)
+        IReadOnlyCollection<MappingModel> mappings,
+        bool useFrozenDictionary)
     {
-        sb.AppendLine("    private static readonly FrozenDictionary<(Type Source, Type Destination), Func<object, object>> _map =");
+        var mapType = useFrozenDictionary
+            ? "FrozenDictionary<(Type Source, Type Destination), Func<object, object>>"
+            : "Dictionary<(Type Source, Type Destination), Func<object, object>>";
+        var mapIntoType = useFrozenDictionary
+            ? "FrozenDictionary<(Type Source, Type Destination), Func<object, object, object>>"
+            : "Dictionary<(Type Source, Type Destination), Func<object, object, object>>";
+        var freeze = useFrozenDictionary ? ".ToFrozenDictionary()" : "";
+
+        // Emitted into the generated file itself (not just this generator's own source) so a
+        // consumer opening GeneratedMappings.g.cs can see which implementation they got and why,
+        // without needing to know this generator's internals.
+        sb.AppendLine(useFrozenDictionary
+            ? "    // System.Collections.Frozen.FrozenDictionary is available on this target framework (.NET 8+) - used below."
+            : "    // System.Collections.Frozen.FrozenDictionary is not available on this target framework (requires .NET 8+) - falling back to Dictionary.");
+        sb.AppendLine($"    private static readonly {mapType} _map =");
         sb.AppendLine("        new Dictionary<(Type, Type), Func<object, object>>");
         sb.AppendLine("        {");
 
@@ -31,10 +50,10 @@ internal static partial class MappingEmitter
             sb.AppendLine($"            [(typeof({source}), typeof({destination}))] = s => (({source})s).To{simpleName}(),");
         }
 
-        sb.AppendLine("        }.ToFrozenDictionary();");
+        sb.AppendLine($"        }}{freeze};");
         sb.AppendLine();
 
-        sb.AppendLine("    private static readonly FrozenDictionary<(Type Source, Type Destination), Func<object, object, object>> _mapInto =");
+        sb.AppendLine($"    private static readonly {mapIntoType} _mapInto =");
         sb.AppendLine("        new Dictionary<(Type, Type), Func<object, object, object>>");
         sb.AppendLine("        {");
 
@@ -54,7 +73,7 @@ internal static partial class MappingEmitter
             sb.AppendLine($"            [(typeof({source}), typeof({destination}))] = (s, d) => (({source})s).To{simpleName}(({destination})d),");
         }
 
-        sb.AppendLine("        }.ToFrozenDictionary();");
+        sb.AppendLine($"        }}{freeze};");
         sb.AppendLine();
 
         sb.AppendLine("    public static TDestination Map<TDestination>(object source)");

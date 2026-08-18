@@ -4,9 +4,9 @@ namespace GeneratedMapper.Generator;
 
 // Every diagnostic the generator can report, id'd GM001-GM009. IDs are assigned in the order
 // each check was implemented, not renumbered afterward when new ones were added in between
-// (GM008 was added after GM009 existed) - there's no formal ID-stability policy yet (see
-// docs/roadmapv2.md AD4/R7), so treat existing IDs as intended to stay stable, but don't take
-// that as a guarantee until that decision is made and documented.
+// (GM008 was added after GM009 existed) - there's no formal ID-stability policy yet, so treat
+// existing IDs as intended to stay stable, but don't take that as a guarantee until a real
+// policy (e.g. an AnalyzerReleases.Shipped.md-style commitment) exists.
 internal static class Diagnostics
 {
     public static readonly DiagnosticDescriptor UnmappedDestinationProperty = new(

@@ -11,8 +11,7 @@
     <!-- Dev-only benchmark dependency, never part of the packable/shipped surface
          (src/GeneratedMapper.Abstractions, src/GeneratedMapper.Generator). Pinned for
          reproducibility; AutoMapper 15+ uses a commercial/OSS dual license (free for
-         individuals and organizations under $5M annual revenue) - see
-         docs/automapper-comparison.md and docs/benchmarks.md for details. -->
+         individuals and organizations under $5M annual revenue). -->
     <PackageReference Include="AutoMapper" Version="16.2.0" />
     <PackageReference Include="BenchmarkDotNet" Version="0.15.8" />
     <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" Version="8.0.10" />

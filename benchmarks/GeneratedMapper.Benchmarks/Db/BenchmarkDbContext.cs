@@ -17,9 +17,8 @@ public sealed class BenchmarkDbContext : DbContext
     public DbSet<GraphComment> Comments => Set<GraphComment>();
 
     // Not part of the throughput benchmarks - used by ProjectionTranslationTests to check
-    // whether [MapCondition] properties leak into AutoMapper's ProjectTo the way
-    // docs/automapper-comparison.md's "conditional mapping doesn't reach SQL projections"
-    // claim describes.
+    // whether [MapCondition] properties leak into AutoMapper's ProjectTo the way this
+    // project's "conditional mapping doesn't reach SQL projections" claim describes.
     public DbSet<ConditionalSource> ConditionalRecords => Set<ConditionalSource>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)

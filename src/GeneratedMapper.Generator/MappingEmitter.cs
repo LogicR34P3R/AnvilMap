@@ -17,7 +17,10 @@ namespace GeneratedMapper.Generator;
 // only matters at emission time, not during per-property resolution.
 internal static partial class MappingEmitter
 {
-    public static string Emit(IReadOnlyCollection<MappingModel> mappings, Action<Diagnostic>? report = null)
+    public static string Emit(
+        IReadOnlyCollection<MappingModel> mappings,
+        bool useFrozenDictionary,
+        Action<Diagnostic>? report = null)
     {
         var validMappings = new List<MappingModel>();
 
@@ -28,8 +31,8 @@ internal static partial class MappingEmitter
             // the constructor call), and not via object-initializer syntax either (a positional
             // record's constructor parameters are required, so `new Dest { Prop = x }` alone
             // won't compile). The whole mapping is skipped rather than emitting code that can't
-            // build - see docs/roadmapv2.md F6 for closing this gap via constructor-argument
-            // matching.
+            // build. Closing this gap would mean matching constructor parameters to settable
+            // properties by name/type instead of skipping - not implemented yet.
             if (HasInitOnlyProperty(mapping) && !mapping.DestinationHasParameterlessConstructor)
             {
                 report?.Invoke(Diagnostic.Create(
@@ -54,7 +57,8 @@ internal static partial class MappingEmitter
         sb.AppendLine("#nullable enable");
         sb.AppendLine();
         sb.AppendLine("using System;");
-        sb.AppendLine("using System.Collections.Frozen;");
+        if (useFrozenDictionary)
+            sb.AppendLine("using System.Collections.Frozen;");
         sb.AppendLine("using System.Collections.Generic;");
         sb.AppendLine("using System.Linq;");
         sb.AppendLine("using System.Linq.Expressions;");
@@ -70,7 +74,7 @@ internal static partial class MappingEmitter
         foreach (var mapping in validMappings)
             EmitProjection(sb, mapping, byPair, report);
 
-        EmitGenericDispatcher(sb, validMappings);
+        EmitGenericDispatcher(sb, validMappings, useFrozenDictionary);
 
         sb.AppendLine("}");
         sb.AppendLine();
