@@ -1,0 +1,27 @@
+# Build output
+[Bb]in/
+[Oo]bj/
+
+# Generator's own emitted-source dump (samples/tests opt into writing these via
+# EmitCompilerGeneratedFiles + CompilerGeneratedFilesOutputPath for local inspection)
+Generated/
+
+# Benchmark run output (reproducible via docs/benchmarks.md's "how to reproduce")
+BenchmarkDotNet.Artifacts/
+
+# IDE / tooling
+.idea/
+.vs/
+.vscode/
+*.user
+*.suo
+
+# Claude Code session/config
+.claude/
+
+# Internal planning docs - not part of the published/public surface
+docs/
+
+# OS cruft
+.DS_Store
+Thumbs.db

@@ -1,0 +1,99 @@
+# GeneratedMapper
+
+Source-generator-based mapper: compile-time replacement for runtime reflection-based mappers, for mapping between database entities and view models, with EF Core-translatable SQL projection.
+
+## Mapping declaration
+
+```csharp
+[MapTo(typeof(UserDto), GenerateReverse = true)]
+[MapProperty(
+    typeof(UserDto),
+    nameof(User.Email),
+    nameof(UserDto.EmailAddress))]
+public sealed class User
+{
+    public int Id { get; set; }
+    public string Email { get; set; } = "";
+}
+```
+
+The mapping configuration lives on the mapping declaration (the source type), not on either DTO/entity property. This keeps reverse mappings and projection mappings unambiguous about direction. Use `[MapIgnore]` on a destination property to opt it out of auto-wiring.
+
+For each declared mapping the generator emits, into a `GeneratedMapper.GeneratedMappings` static class:
+
+- `To{Destination}(this Source source)` / `To{Destination}(this Source source, Destination destination)` — imperative, in-memory mapping.
+- `To{Destination}Projection` — a static `Expression<Func<Source, Destination>>` built entirely from inlined object initializers (no method calls), so it's translatable by EF Core.
+- `ProjectTo{Destination}(this IQueryable<Source> source)` — applies the projection to a query, e.g. `dbContext.Blogs.ProjectToBlogDto()`.
+- A generic `Map<TDestination>`/`Map<TSource,TDestination>` dispatcher (backed by static `FrozenDictionary` lookup tables, not a chain of type checks), plus a `GeneratedMapperService : IMapper` for DI registration (`services.AddSingleton<IMapper, GeneratedMapperService>()`).
+
+Nested and enumerable (`List<T>`/array/`IEnumerable<T>`) properties are mapped automatically when a mapping exists between the element types.
+
+### Conditional mapping
+
+```csharp
+[MapTo(typeof(PostDto))]
+[MapCondition(typeof(PostDto), nameof(PostDto.Body), nameof(ShouldMapBody))]
+public sealed class Post
+{
+    public string Body { get; set; } = "";
+    public bool IsDraft { get; set; }
+
+    public static bool ShouldMapBody(Post source) => !source.IsDraft;
+}
+```
+
+`[MapCondition]` gates a single destination property behind a `static bool` method declared on the source type, with signature `(TSource)` or `(TSource, TDestination?)` (the two-arg form can also inspect the destination, e.g. "only overwrite if not already set"). The condition is honored by the imperative mapper and — since it's just called through `To{Destination}(...)` — by the `IMapper`/`Map<T>` dispatcher too. It is **not** honored by `.ProjectTo{Destination}()`: an arbitrary method call can't be translated to SQL, so the property is left out of the projection entirely (`GM005`). Conditions are not auto-reversed by `GenerateReverse` — declare a separate `[MapCondition]` on the DTO if the reverse direction needs one too.
+
+### Custom conversion
+
+```csharp
+[MapTo(typeof(UserDto))]
+[MapUsing(typeof(UserDto), nameof(UserDto.FullName), nameof(ComputeFullName))]
+public sealed class User
+{
+    public string FirstName { get; set; } = "";
+    public string LastName { get; set; } = "";
+
+    public static string ComputeFullName(User source) => $"{source.FirstName} {source.LastName}";
+}
+```
+
+`[MapUsing]` maps a single destination property through a static conversion function instead of a direct/nested/enumerable match — useful when a destination property doesn't correspond to any single source property (a computed value, a combined field, a translated enum). `conditionMethod`/`converterMethod` must be a `static` method on the source type with signature `TDestinationProperty Method(TSource)` (an implicitly convertible return type is also accepted). It's honored by both the imperative mapper and SQL projections — for projections the call is inlined as-is, so it's your responsibility to keep the method translatable by EF Core's query provider. It can be combined with `[MapCondition]` on the same property (the condition gates whether the converted value is assigned). Like `[MapCondition]`, it is **not** auto-reversed by `GenerateReverse` — declare a separate `[MapUsing]` on the destination type if the reverse direction needs one too.
+
+### Diagnostics
+
+`GM001` (destination property left unmapped), `GM002` (projection skipped — the mapping graph is cyclic; the imperative method is still generated), `GM003` (error — incompatible property types with no implicit conversion), `GM004` (error — `[MapCondition]` references a method that doesn't exist or has the wrong signature), `GM005` (a conditionally-mapped property was left out of a SQL projection), `GM006` (a mapping was skipped entirely because the destination has an init-only property but no accessible parameterless constructor), `GM007` (`[MapCondition]` on an init-only destination property isn't supported — the property was left out), `GM008` (the two-arg `To{Dest}(source, destination)` overload was omitted because the destination has init-only properties), `GM009` (error — `[MapUsing]` references a method that doesn't exist or has the wrong signature/return type).
+
+### Recursion guard for self-referential types
+
+```csharp
+[MapTo(typeof(CategoryDto), MaxDepth = 3)]
+public sealed class Category
+{
+    public string Name { get; set; } = "";
+    public Category? Parent { get; set; }
+}
+```
+
+`MaxDepth` guards a mapping that directly maps into itself (a property whose type is the same source/destination pair, e.g. `Category.Parent`/`Category.Children` both mapping to `Category`) against unbounded recursion on a cyclic runtime object graph — without it, a genuinely self-referential graph can stack-overflow at runtime, since the generator only detects *projection* cycles, not imperative ones. Once the depth limit is hit, the recursive property is left unset instead of continuing to recurse. Defaults to `0` (unlimited, unchanged behavior). Only guards direct self-reference within one `[MapTo]` declaration — it does not detect indirect cycles across multiple different mapping pairs.
+
+### Init-only and record destinations
+
+A destination with `init`-only properties (including non-positional records) is mapped by building the object via initializer syntax in `To{Dest}(source)`; the two-arg `To{Dest}(source, destination)` overload (and `IMapper.Map(source, destination)`) is omitted for it, since an `init` property can't be assigned after construction (`GM008`). Positional records without a parameterless constructor (e.g. `record UserDto(int Id, string Name);`) aren't supported yet — add a parameterless constructor or give every positional parameter a default to opt in, otherwise the mapping is skipped with `GM006`.
+
+## Project layout
+
+- `src/GeneratedMapper.Abstractions` — attributes (`MapTo`, `MapProperty`, `MapIgnore`, `MapCondition`) and the `IMapper` interface.
+- `src/GeneratedMapper.Generator` — the incremental source generator.
+- `samples/GeneratedMapper.Sample` — a runnable console app mapping EF Core entities (SQLite in-memory) to view models, printing the SQL generated by `ProjectToBlogDto()`.
+- `tests/GeneratedMapper.Generator.Tests` — generator unit tests driven via `CSharpGeneratorDriver`.
+- `benchmarks/GeneratedMapper.Benchmarks` — BenchmarkDotNet throughput/startup/SQL-projection comparison against AutoMapper; see `docs/benchmarks.md` for results and `docs/benchmark-plan.md` for how it's structured.
+- `benchmarks/GeneratedMapper.Benchmarks.ParityTests` — correctness (and SQL-translation) checks that must pass before the benchmark numbers above mean anything.
+
+## Try it
+
+```
+dotnet build GeneratedMapper.sln
+dotnet test tests/GeneratedMapper.Generator.Tests
+dotnet run --project samples/GeneratedMapper.Sample
+```
