@@ -64,6 +64,8 @@ public sealed class User
 
 `GM001` (destination property left unmapped), `GM002` (projection skipped — the mapping graph is cyclic; the imperative method is still generated), `GM003` (error — incompatible property types with no implicit conversion), `GM004` (error — `[MapCondition]` references a method that doesn't exist or has the wrong signature), `GM005` (a conditionally-mapped property was left out of a SQL projection), `GM006` (a mapping was skipped entirely because the destination has an init-only property but no accessible parameterless constructor), `GM007` (`[MapCondition]` on an init-only destination property isn't supported — the property was left out), `GM008` (the two-arg `To{Dest}(source, destination)` overload was omitted because the destination has init-only properties), `GM009` (error — `[MapUsing]` references a method that doesn't exist or has the wrong signature/return type).
 
+Diagnostic IDs are never reused, only retired, tracked via `src/GeneratedMapper.Generator/AnalyzerReleases.Shipped.md`/`.Unshipped.md` (mechanically enforced at build time — see `CONTRIBUTING.md`).
+
 ### Recursion guard for self-referential types
 
 ```csharp

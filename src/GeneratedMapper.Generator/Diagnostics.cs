@@ -3,7 +3,7 @@ using Microsoft.CodeAnalysis;
 namespace GeneratedMapper.Generator;
 
 // GM001-GM009. IDs are assigned in implementation order, not renumbered (GM008 came after
-// GM009) - no formal stability policy yet, so don't treat them as guaranteed permanent.
+// GM009). IDs are never reused, only retired - see AnalyzerReleases.Shipped.md.
 internal static class Diagnostics
 {
     public static readonly DiagnosticDescriptor UnmappedDestinationProperty = new(
