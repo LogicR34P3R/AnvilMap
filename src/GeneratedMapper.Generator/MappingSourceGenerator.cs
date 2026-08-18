@@ -1,6 +1,7 @@
 using System.Collections.Immutable;
 using System.Linq;
 using Microsoft.CodeAnalysis;
+using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 
 namespace GeneratedMapper.Generator;
@@ -20,11 +21,9 @@ public sealed class MappingSourceGenerator : IIncrementalGenerator
     /// <inheritdoc/>
     public void Initialize(IncrementalGeneratorInitializationContext context)
     {
-        // Stage 1 - discovery: ForAttributeWithMetadataName is Roslyn's fast path for "find
-        // every syntax node with this exact attribute", backed by a syntactic pre-filter before
-        // it ever binds symbols - much cheaper than a plain SyntaxProvider.CreateSyntaxProvider
-        // walking the whole tree. Each matching type yields zero or more MappingDeclaration
-        // values (one per [MapTo] on it - see MappingDiscovery), which SelectMany flattens.
+        // Stage 1 - discovery: ForAttributeWithMetadataName syntactically pre-filters before
+        // binding symbols. Each match yields zero or more MappingDeclaration values (one per
+        // [MapTo] - see MappingDiscovery), which SelectMany flattens.
         var declarations = context.SyntaxProvider
             .ForAttributeWithMetadataName(
                 GeneratorConstants.MapToAttribute,
@@ -33,14 +32,10 @@ public sealed class MappingSourceGenerator : IIncrementalGenerator
             .SelectMany(static (declarations, _) => declarations)
             .Collect();
 
-        // Collect() gathers every declaration across the whole compilation into one value,
-        // which is what forces the rest of this pipeline to re-run in full whenever *any*
-        // mapped type changes. That's an accepted tradeoff, not an oversight: resolving a
-        // single mapping can depend on any other declared mapping (MappingResolver's
-        // nested/enumerable resolution needs the full MappingGraph), so there's no correct way
-        // to resolve declarations one at a time in isolation. Measured to stay well under
-        // 100ms of typical single-edit latency even at 1,000+ mapped types, so this hasn't
-        // needed revisiting.
+        // Collect() forces the whole pipeline to re-run whenever any mapped type changes -
+        // accepted, not an oversight: resolving one mapping can depend on any other
+        // (MappingResolver needs the full MappingGraph). Measured to stay well under 100ms
+        // even at 1,000+ mapped types.
         var combined = context.CompilationProvider.Combine(declarations);
 
         context.RegisterSourceOutput(combined, static (spc, pair) =>
@@ -50,9 +45,8 @@ public sealed class MappingSourceGenerator : IIncrementalGenerator
             if (allDeclarations.IsDefaultOrEmpty)
                 return;
 
-            // Stage 2 - graph construction: every declaration (plus its auto-generated reverse,
-            // if [MapTo(GenerateReverse = true)]) goes into one MappingGraph before anything is
-            // resolved, so resolution never has to care about declaration order.
+            // Stage 2 - graph construction: every declaration (plus its reverse, if declared)
+            // goes into one MappingGraph before resolution starts.
             var graph = new MappingGraph();
             foreach (var declaration in allDeclarations)
                 graph.Add(declaration);
@@ -67,23 +61,23 @@ public sealed class MappingSourceGenerator : IIncrementalGenerator
                     spc.ReportDiagnostic))
                 .ToImmutableArray();
 
-            // System.Collections.Frozen.FrozenDictionary only exists on .NET 8+ (there is no
-            // netstandard2.0/net6.0/net7.0 polyfill package for it) - but this generator itself
-            // targets netstandard2.0 so it can run as an analyzer against *any* consumer's
-            // compilation, including ones that target something older than net8.0. Asking the
-            // consumer's own Compilation whether the type resolves is the only correct way to
-            // know which dispatcher shape it can actually compile; hardcoding a TFM check here
-            // would be wrong (a net6.0 project could still reference a FrozenDictionary-shimming
-            // package in principle, and more practically, the generator shouldn't need to know
-            // every possible consumer TFM by name).
+            // FrozenDictionary only exists on .NET 8+, with no polyfill - ask the consumer's
+            // own Compilation whether it resolves rather than guessing from a TFM name.
             var canUseFrozenDictionary =
                 compilation.GetTypeByMetadataName("System.Collections.Frozen.FrozenDictionary`2") is not null;
 
-            // Stage 4 - emission: one generated file for the whole compilation. Splitting to
-            // one file per mapping would let Roslyn's own incrementality skip re-emitting
-            // unchanged mappings, but isn't worth the added complexity unless Collect()'s
-            // whole-graph re-resolution above is ever actually measured to be a problem.
-            var source = MappingEmitter.Emit(models, canUseFrozenDictionary, spc.ReportDiagnostic);
+            // #nullable enable and `!` both need C# 8+; netstandard2.0/net5.0 default below
+            // that without an explicit <LangVersion>. Same approach: check the actual
+            // compilation instead of guessing.
+            var languageVersion = compilation.SyntaxTrees
+                .OfType<CSharpSyntaxTree>()
+                .Select(t => ((CSharpParseOptions)t.Options).LanguageVersion)
+                .DefaultIfEmpty(LanguageVersion.CSharp8)
+                .Max();
+            var useNullableReferenceTypes = languageVersion >= LanguageVersion.CSharp8;
+
+            // Stage 4 - emission: one generated file for the whole compilation.
+            var source = MappingEmitter.Emit(models, canUseFrozenDictionary, useNullableReferenceTypes, spc.ReportDiagnostic);
             spc.AddSource("GeneratedMappings.g.cs", source);
         });
     }

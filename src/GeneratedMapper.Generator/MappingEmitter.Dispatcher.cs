@@ -3,19 +3,11 @@ using System.Text;
 
 namespace GeneratedMapper.Generator;
 
-// Emits the runtime-dispatch layer: a type-keyed lookup from (source type, destination type)
-// to the right generated To{Dest}() call, plus the IMapper service that wraps it. This exists
-// for call sites that don't know the concrete source/destination types at compile time (e.g.
-// a generic repository, or DI consumers only holding an IMapper) - everywhere else, prefer
-// calling the statically-typed To{Dest}() extension method directly, since it skips this
-// dictionary lookup entirely (and participates in Find Usages/Rename, unlike a runtime
-// dispatch table). The map is built once, from a fixed compile-time-known mapping set, so a
-// FrozenDictionary (immutable, optimized for repeated lookups) would be a strict improvement
-// over a regular Dictionary here - nothing is ever added to it after construction - but it only
-// exists on .NET 8+, so it's used when the consuming compilation can actually resolve it
-// (useFrozenDictionary, computed once in MappingSourceGenerator from that Compilation) and a
-// plain Dictionary otherwise. Same lookup semantics either way; only the field's declared type
-// and the trailing `.ToFrozenDictionary()` call differ.
+// Type-keyed dispatch: (source type, destination type) -> the right To{Dest}() call, plus
+// the IMapper service. For callers that don't know concrete types at compile time; prefer the
+// statically-typed To{Dest}() extension method otherwise. Uses FrozenDictionary when the
+// consumer's target framework has it (.NET 8+), a plain Dictionary otherwise - same lookup
+// semantics either way.
 internal static partial class MappingEmitter
 {
     private static void EmitGenericDispatcher(
@@ -31,9 +23,8 @@ internal static partial class MappingEmitter
             : "Dictionary<(Type Source, Type Destination), Func<object, object, object>>";
         var freeze = useFrozenDictionary ? ".ToFrozenDictionary()" : "";
 
-        // Emitted into the generated file itself (not just this generator's own source) so a
-        // consumer opening GeneratedMappings.g.cs can see which implementation they got and why,
-        // without needing to know this generator's internals.
+        // Emitted into the generated file itself so a consumer can see which implementation
+        // they got without reading this generator's source.
         sb.AppendLine(useFrozenDictionary
             ? "    // System.Collections.Frozen.FrozenDictionary is available on this target framework (.NET 8+) - used below."
             : "    // System.Collections.Frozen.FrozenDictionary is not available on this target framework (requires .NET 8+) - falling back to Dictionary.");
@@ -59,10 +50,8 @@ internal static partial class MappingEmitter
 
         foreach (var mapping in mappings)
         {
-            // Mirrors MappingEmitter.Imperative.cs: no two-arg To{Dest}(source, destination)
-            // method exists for init-only destinations (GM008), so there's nothing for this
-            // table to dispatch to - IMapper.Map(source, destination) simply won't resolve an
-            // entry for that pair at runtime.
+            // Mirrors the imperative emitter: no two-arg overload for init-only destinations
+            // (GM008), so there's nothing for this table to dispatch to.
             if (HasInitOnlyProperty(mapping))
                 continue;
 
@@ -90,7 +79,9 @@ internal static partial class MappingEmitter
 
         sb.AppendLine("    public static TDestination Map<TSource, TDestination>(TSource source)");
         sb.AppendLine("    {");
-        sb.AppendLine("        if (source is null) throw new ArgumentNullException(nameof(source));");
+        // `is null` against an open generic type parameter needs C# 8+ (CS8511 below that);
+        // ReferenceEquals works on every version.
+        sb.AppendLine("        if (object.ReferenceEquals(source, null)) throw new ArgumentNullException(nameof(source));");
         sb.AppendLine("        if (_map.TryGetValue((source.GetType(), typeof(TDestination)), out var mapper))");
         sb.AppendLine("            return (TDestination)mapper(source);");
         sb.AppendLine(
@@ -102,8 +93,8 @@ internal static partial class MappingEmitter
 
         sb.AppendLine("    public static TDestination Map<TSource, TDestination>(TSource source, TDestination destination)");
         sb.AppendLine("    {");
-        sb.AppendLine("        if (source is null) throw new ArgumentNullException(nameof(source));");
-        sb.AppendLine("        if (destination is null) throw new ArgumentNullException(nameof(destination));");
+        sb.AppendLine("        if (object.ReferenceEquals(source, null)) throw new ArgumentNullException(nameof(source));");
+        sb.AppendLine("        if (object.ReferenceEquals(destination, null)) throw new ArgumentNullException(nameof(destination));");
         sb.AppendLine("        if (_mapInto.TryGetValue((source.GetType(), destination.GetType()), out var mapper))");
         sb.AppendLine("            return (TDestination)mapper(source, destination);");
         sb.AppendLine(

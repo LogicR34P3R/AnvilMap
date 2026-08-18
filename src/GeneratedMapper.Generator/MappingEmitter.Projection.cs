@@ -4,15 +4,10 @@ using Microsoft.CodeAnalysis;
 
 namespace GeneratedMapper.Generator;
 
-// Builds the ProjectTo{Dest}() IQueryable extension methods: a single
-// Expression<Func<TSource, TDest>> built entirely from `new Dest { Prop = ... }`
-// object-initializer syntax, never a delegate/method call (aside from a [MapUsing] converter,
-// which is the caller's own responsibility to keep translatable - see MapUsingAttribute).
-// That "no delegate calls" constraint is what makes the result reliably SQL-translatable by
-// EF Core's query provider, and it's also why this file can't reuse anything from
-// MappingEmitter.Imperative.cs: the imperative emitter freely calls other generated methods
-// (`source.Prop.ToDest()`), which is fine in a normal C# method body but would break outside
-// an Expression tree meant for a LINQ provider to translate.
+// Builds ProjectTo{Dest}(): an Expression<Func<TSource, TDest>> from `new Dest { ... }`
+// initializers only, never a method call (aside from [MapUsing], the caller's own
+// responsibility to keep translatable) - that's what keeps it SQL-translatable, and why this
+// can't reuse MappingEmitter.Imperative.cs's method-calling style.
 internal static partial class MappingEmitter
 {
     private static void EmitProjection(
@@ -21,12 +16,8 @@ internal static partial class MappingEmitter
         Dictionary<(string Source, string Destination), MappingModel> byPair,
         System.Action<Diagnostic>? report)
     {
-        // `visiting` guards against infinite recursion while building the expression itself:
-        // a cyclic mapping graph (e.g. Category.Parent/Children both mapping to Category) would
-        // otherwise make BuildProjectionInitializer recurse forever trying to inline "one more
-        // level". Hitting an already-visiting pair aborts the whole projection (GM002) rather
-        // than truncating it silently - unlike the imperative side, there's no sensible
-        // "stop after N levels" default for a single Expression tree.
+        // `visiting` guards against infinite recursion on a cyclic mapping graph; hitting an
+        // already-visiting pair aborts the whole projection (GM002) rather than truncating it.
         var visiting = new HashSet<(string, string)>();
         var body = BuildProjectionInitializer(mapping, byPair, "source", visiting, report);
 
@@ -69,11 +60,8 @@ internal static partial class MappingEmitter
 
         foreach (var property in mapping.Properties)
         {
-            // [MapCondition]'s method is a runtime Func, which can't appear inside an
-            // Expression tree a LINQ provider needs to translate to SQL - the property is
-            // dropped from the initializer entirely (not just left unconditioned) so the
-            // generated SQL never even selects that column. GM005 makes this an observable,
-            // diagnosable choice rather than a silent gap.
+            // [MapCondition]'s method can't appear in an Expression tree, so the property is
+            // dropped from the initializer entirely (GM005) - the column is never selected.
             if (property.ConditionMethodName is not null)
             {
                 report?.Invoke(Diagnostic.Create(

@@ -2,11 +2,8 @@ using Microsoft.CodeAnalysis;
 
 namespace GeneratedMapper.Generator;
 
-// Every diagnostic the generator can report, id'd GM001-GM009. IDs are assigned in the order
-// each check was implemented, not renumbered afterward when new ones were added in between
-// (GM008 was added after GM009 existed) - there's no formal ID-stability policy yet, so treat
-// existing IDs as intended to stay stable, but don't take that as a guarantee until a real
-// policy (e.g. an AnalyzerReleases.Shipped.md-style commitment) exists.
+// GM001-GM009. IDs are assigned in implementation order, not renumbered (GM008 came after
+// GM009) - no formal stability policy yet, so don't treat them as guaranteed permanent.
 internal static class Diagnostics
 {
     public static readonly DiagnosticDescriptor UnmappedDestinationProperty = new(

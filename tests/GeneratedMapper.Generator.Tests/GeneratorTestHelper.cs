@@ -24,8 +24,24 @@ internal static class GeneratorTestHelper
         => Run(source, PlatformReferences.Append(MetadataReference.CreateFromFile(typeof(MapToAttribute).Assembly.Location)).ToArray());
 
     public static GeneratorTestResult Run(string source, MetadataReference[] references)
+        => Run(source, references, new CSharpParseOptions(LanguageVersion.Latest));
+
+    // The parseOptions overload exists for tests that need to simulate an older consumer
+    // LangVersion (e.g. LanguageVersionFallbackTests) - it's passed to *both* the input syntax
+    // tree and the generator driver, so the generated source is itself parsed/compiled under
+    // that same version, matching what a real consumer's build would actually experience
+    // (their compiler parses every file in the compilation, generator-added or not, under one
+    // project-wide LangVersion).
+    public static GeneratorTestResult Run(string source, MetadataReference[] references, CSharpParseOptions parseOptions)
     {
-        var syntaxTree = CSharpSyntaxTree.ParseText(source, new CSharpParseOptions(LanguageVersion.Latest));
+        var syntaxTree = CSharpSyntaxTree.ParseText(source, parseOptions);
+
+        // NullableContextOptions.Enable is itself invalid (CS8630) below C# 8 - mirrors the
+        // same constraint the generator's own useNullableReferenceTypes detection is built
+        // around, just applied to this test compilation's options rather than generated output.
+        var nullableContextOptions = parseOptions.LanguageVersion >= LanguageVersion.CSharp8
+            ? NullableContextOptions.Enable
+            : NullableContextOptions.Disable;
 
         var compilation = CSharpCompilation.Create(
             "GeneratedMapper.Generator.Tests.Target",
@@ -33,9 +49,11 @@ internal static class GeneratorTestHelper
             references,
             new CSharpCompilationOptions(
                 OutputKind.DynamicallyLinkedLibrary,
-                nullableContextOptions: NullableContextOptions.Enable));
+                nullableContextOptions: nullableContextOptions));
 
-        var driver = CSharpGeneratorDriver.Create(new MappingSourceGenerator())
+        var driver = CSharpGeneratorDriver.Create(
+                new[] { new MappingSourceGenerator().AsSourceGenerator() },
+                parseOptions: parseOptions)
             .RunGeneratorsAndUpdateCompilation(compilation, out var outputCompilation, out _);
 
         var runResult = driver.GetRunResult();

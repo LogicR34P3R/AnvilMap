@@ -6,13 +6,9 @@ using Microsoft.CodeAnalysis.CSharp;
 
 namespace GeneratedMapper.Generator;
 
-// The core property-matching pass. Takes one MappingDeclaration (what the user wrote via
-// [MapTo]/[MapProperty]/[MapCondition]/[MapUsing]) plus the full MappingGraph (every other
-// declared mapping in the compilation, needed below to resolve nested/enumerable properties)
-// and produces a MappingModel: one resolved PropertyMappingModel per destination property
-// that could be matched, plus a Diagnostic for every property that couldn't be. MappingEmitter
-// never re-derives any of this - by the time a MappingModel exists, every property in it is
-// known-emittable.
+// Matches a MappingDeclaration's properties against the destination type, producing a
+// MappingModel with one PropertyMappingModel per matched property; unmatched properties
+// become diagnostics instead. MappingEmitter never re-validates this.
 internal static class MappingResolver
 {
     public static MappingModel Resolve(
@@ -33,8 +29,7 @@ internal static class MappingResolver
         var explicitConverters = declaration.ExplicitConverters
             .ToDictionary(x => x.DestinationProperty, x => x.ConverterMethodName);
 
-        // Write-only properties (get accessor missing) can't be read as a mapping source, so
-        // they're excluded here rather than filtered out property-by-property below.
+        // Write-only properties (no getter) can't be a mapping source, so excluded here.
         var sourceProperties = source.GetMembers()
             .OfType<IPropertySymbol>()
             .Where(p => !p.IsStatic && p.GetMethod is not null)
@@ -42,13 +37,9 @@ internal static class MappingResolver
 
         var properties = new List<PropertyMappingModel>();
 
-        // For every settable, non-ignored destination property, try each mapping strategy in
-        // order: [MapUsing] converter (bypasses source-property lookup entirely - the value
-        // comes from a method call, not a property read) → name match ([MapProperty] override
-        // or exact name) → type-compatibility ("kind") resolution → optional [MapCondition]
-        // gate. Anything that falls through every step is reported as GM001/GM003/GM004/GM009
-        // and left out of the mapping (not a build error by itself - see Diagnostics.cs for
-        // which of these are Info/Warning/Error).
+        // Tries each strategy in order: [MapUsing] converter, name match, kind resolution,
+        // then [MapCondition] gate. Unmatched properties are reported (GM001/GM003/GM004/
+        // GM009) and left out.
         foreach (var destinationProperty in destination.GetMembers().OfType<IPropertySymbol>())
         {
             if (destinationProperty.IsStatic)
@@ -68,8 +59,7 @@ internal static class MappingResolver
                 if (converter is null)
                     continue;
 
-                // [MapCondition] can still gate a [MapUsing]-converted property - the two
-                // attributes are independent and compose normally.
+                // [MapCondition] can still gate a [MapUsing]-converted property; independent.
                 var converterCondition = ResolveCondition(source, destination, destinationProperty, explicitConditions, report);
 
                 if (!converterCondition.Success)
@@ -149,12 +139,9 @@ internal static class MappingResolver
                 resolution.DestinationShape));
         }
 
-        // Consumed by MappingEmitter: a destination with any init-only property AND no
-        // parameterless constructor can't be built at all (not even via object-initializer
-        // syntax, since a positional record's constructor requires its parameters) - that
-        // whole mapping is skipped with GM006 rather than emitting code that won't compile.
-        // Resolver deliberately does not attempt to match constructor parameters to properties
-        // for such destinations (e.g. positional records) - a still-open gap, not implemented.
+        // Consumed by MappingEmitter: init-only property + no parameterless constructor (e.g.
+        // a positional record) means the mapping can't be built at all (GM006) - constructor
+        // parameter matching isn't implemented.
         var hasParameterlessConstructor = destination.InstanceConstructors
             .Any(c => c.Parameters.Length == 0);
 
@@ -166,20 +153,10 @@ internal static class MappingResolver
             declaration.MaxDepth);
     }
 
-    // Decides *how* a source property becomes a destination property's value, checked in this
-    // order because each check is progressively more expensive and more general:
-    //   1. Identical type -> straight assignment.
-    //   2. Both sides are enumerable of some element type, and those element types either match
-    //      exactly or are themselves a declared mapping in the graph -> project/select over the
-    //      collection.
-    //   3. Both sides are the same named type as a declared mapping in the graph -> recurse into
-    //      that type's own generated To{Dest}()/projection.
-    //   4. Neither of the above, but the C# compiler would allow an implicit conversion (e.g.
-    //      int -> long, or a user-defined implicit operator) -> straight assignment, same as (1).
-    // Steps 2 and 3 both need `graph`, not just `declaration`, because the element/property type
-    // in question may have its own, entirely separate [MapTo] declared on a different type
-    // elsewhere in the compilation - MappingSourceGenerator collects every declaration into one
-    // MappingGraph before resolving any of them for exactly this reason.
+    // Checked in order: identical type -> direct; enumerable with matching/mapped element
+    // types -> Enumerable; same named type with a declared mapping -> Nested; otherwise an
+    // implicit conversion -> direct. Enumerable/Nested need `graph`, not just `declaration`,
+    // since the element/property type may have its own [MapTo] declared elsewhere.
     private static KindResolution ResolveKind(
         Compilation compilation,
         MappingGraph graph,
@@ -235,9 +212,7 @@ internal static class MappingResolver
         ITypeSymbol? ElementDestination,
         CollectionShape DestinationShape = CollectionShape.List);
 
-    // Only Array and HashSet-family types need a non-default materialization call
-    // (MappingEmitter.MaterializeCall); every other destination collection type falls back to
-    // List, which is also what a plain IEnumerable<T>/ICollection<T> destination gets.
+    // Only Array/HashSet need a non-default materialize call; everything else falls back to List.
     private static CollectionShape DetermineCollectionShape(ITypeSymbol type)
     {
         if (type is IArrayTypeSymbol)
@@ -256,10 +231,8 @@ internal static class MappingResolver
         return CollectionShape.List;
     }
 
-    // [MapCondition] resolves to one of two accepted static-method shapes, preferring the
-    // two-argument `(TSource, TDestination?)` overload when both exist so a condition can
-    // inspect the destination's current state (e.g. "only overwrite if still default") - see
-    // MapConditionAttribute's doc comment for the exact accepted signatures.
+    // Prefers the two-arg (TSource, TDestination?) signature over one-arg when both exist, so
+    // a condition can inspect the destination's current state.
     private static ConditionResolution ResolveCondition(
         INamedTypeSymbol source,
         INamedTypeSymbol destination,
@@ -301,18 +274,13 @@ internal static class MappingResolver
         return new ConditionResolution(false, null, false);
     }
 
-    // `Success = false` means the referenced method didn't resolve (GM004 already reported by
-    // this point) - the caller skips the property entirely rather than emitting a call to a
-    // method that doesn't exist.
+    // Success = false means GM004 was already reported; caller skips the property.
     private readonly record struct ConditionResolution(
         bool Success,
         string? MethodName,
         bool AcceptsDestination);
 
-    // [MapUsing] resolves to a static `TDestProp Method(TSource)` method, preferring an exact
-    // return-type match and falling back to an implicit conversion (mirrors ResolveKind's
-    // direct-assignment fallback) so e.g. a converter returning `int` still satisfies a `long`
-    // destination property without needing an exact-type overload.
+    // Prefers an exact return-type match, falling back to an implicit conversion.
     private static string? ResolveConverter(
         Compilation compilation,
         INamedTypeSymbol source,
@@ -362,11 +330,8 @@ internal static class MappingResolver
         return false;
     }
 
-    // Two-tier lookup: a closed list of well-known BCL collection shapes first (fast, and
-    // covers the vast majority of real DTOs/entities), then a fallback scan of every
-    // implemented interface for a single-type-argument IEnumerable<T> - this second tier is
-    // what lets a custom collection type (anything implementing IEnumerable<T> without being
-    // named List/HashSet/etc.) still resolve correctly.
+    // Named BCL collection types first, then a fallback scan of implemented interfaces for
+    // IEnumerable<T>, so custom collection types still resolve.
     private static bool TryGetEnumerableElement(ITypeSymbol type, out ITypeSymbol element)
     {
         if (type is IArrayTypeSymbol array)

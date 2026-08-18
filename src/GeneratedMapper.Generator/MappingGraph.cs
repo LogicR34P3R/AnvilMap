@@ -4,13 +4,8 @@ using System.Linq;
 
 namespace GeneratedMapper.Generator;
 
-// The full set of every [MapTo] declaration discovered across the whole compilation, keyed by
-// (source, destination) fully-qualified type name pair. MappingResolver needs this - not just
-// the single declaration it's currently resolving - because a property's nested or element
-// type might be mapped by a completely different [MapTo] declared on a different type; without
-// the full graph there'd be no way to tell "this nested property's type happens to also be
-// mappable" from "it isn't". Built once per generator run in MappingSourceGenerator.Initialize,
-// after every file's declarations have been discovered.
+// Every [MapTo] declaration, keyed by (source, destination) type name. MappingResolver needs
+// the full graph since a nested/element type may be mapped by a separate [MapTo] elsewhere.
 internal sealed class MappingGraph
 {
     private readonly Dictionary<(string Source, string Destination), MappingDeclaration> _mappings = new();
@@ -22,9 +17,8 @@ internal sealed class MappingGraph
         if (!declaration.GenerateReverse)
             return;
 
-        // Conditions and converters are not auto-reversed: their method signatures are tied
-        // to the original source type, which wouldn't type-check against the swapped source
-        // type here. A reverse mapping needs its own explicit [MapCondition]/[MapUsing].
+        // Conditions/converters aren't auto-reversed - their methods are tied to the original
+        // source type. A reverse mapping needs its own [MapCondition]/[MapUsing].
         var reverse = new MappingDeclaration(
             declaration.Destination,
             declaration.Source,

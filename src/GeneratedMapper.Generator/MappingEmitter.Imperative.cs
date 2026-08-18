@@ -7,18 +7,17 @@ namespace GeneratedMapper.Generator;
 
 internal static partial class MappingEmitter
 {
-    // Emits the imperative To{Dest}(source) / To{Dest}(source, destination) extension methods
-    // for one mapping. One of three shapes comes out, depending on the destination's property
-    // set (checked once at the top, since the shape - not just the body - differs):
-    //   1. Plain: sequential `destination.Prop = value;` assignments (the common case).
-    //   2. Self-recursive with a MaxDepth guard: same as (1), but a private depth-counting
-    //      overload is threaded through instead, to stop a cyclic runtime object graph (e.g.
-    //      Category.Parent/Children both mapping to Category) from stack-overflowing.
-    //   3. Init-only destination: properties that must be set at construction go into an
-    //      object-initializer expression instead of sequential assignment; the two-arg
-    //      overload is omitted entirely (GM008) since init setters can't be assigned into an
-    //      already-constructed instance.
-    private static void EmitMapping(StringBuilder sb, MappingModel mapping, System.Action<Diagnostic>? report)
+    // Emits To{Dest}(source) / To{Dest}(source, destination). Three shapes:
+    //   1. Plain: sequential `destination.Prop = value;` assignments.
+    //   2. Self-recursive with MaxDepth: a private depth-counting overload guards a cyclic
+    //      runtime graph against stack-overflowing.
+    //   3. Init-only destination: object-initializer syntax; the two-arg overload is omitted
+    //      (GM008), since init setters can't be assigned after construction.
+    private static void EmitMapping(
+        StringBuilder sb,
+        MappingModel mapping,
+        bool useNullableReferenceTypes,
+        System.Action<Diagnostic>? report)
     {
         var source = mapping.Source.FullyQualifiedName;
         var destination = mapping.Destination.FullyQualifiedName;
@@ -38,33 +37,29 @@ internal static partial class MappingEmitter
             {
                 sb.AppendLine($"    public static {destination} {methodName}(this {source} source, {destination} destination)");
                 sb.AppendLine("    {");
-                EmitAssignments(sb, mapping.Properties, source);
+                EmitAssignments(sb, mapping.Properties, source, useNullableReferenceTypes);
                 sb.AppendLine("        return destination;");
                 sb.AppendLine("    }");
                 sb.AppendLine();
                 return;
             }
 
-            // MaxDepth was declared and this mapping directly references itself (e.g. a
-            // Category whose Children/Parent also map to Category) — thread a depth counter
-            // through a private overload so a cyclic runtime object graph can't stack-overflow.
+            // MaxDepth + self-reference: thread a depth counter through a private overload.
             sb.AppendLine($"    public static {destination} {methodName}(this {source} source, {destination} destination)");
             sb.AppendLine($"        => source.{methodName}(destination, 0);");
             sb.AppendLine();
 
             sb.AppendLine($"    private static {destination} {methodName}(this {source} source, {destination} destination, int depth)");
             sb.AppendLine("    {");
-            EmitAssignments(sb, mapping.Properties, source, mapping);
+            EmitAssignments(sb, mapping.Properties, source, useNullableReferenceTypes, mapping);
             sb.AppendLine("        return destination;");
             sb.AppendLine("    }");
             sb.AppendLine();
             return;
         }
 
-        // Destination has init-only properties: those must be set via object-initializer
-        // syntax at construction, so there's no way to assign them into a pre-existing
-        // instance. The two-arg (source, destination) overload is omitted entirely (GM008);
-        // any remaining regular-`set` properties are still assigned sequentially afterward.
+        // Init-only properties must be set via object-initializer syntax; the two-arg overload
+        // is omitted (GM008), remaining regular-`set` properties are still assigned after.
         report?.Invoke(Diagnostic.Create(
             Diagnostics.TwoArgMapperOmittedInitOnly,
             Location.None,
@@ -87,7 +82,7 @@ internal static partial class MappingEmitter
                 continue;
             }
 
-            var value = BuildValueExpression(property, source);
+            var value = BuildValueExpression(property, source, useNullableReferenceTypes);
 
             if (value is null)
                 continue;
@@ -100,21 +95,19 @@ internal static partial class MappingEmitter
         sb.AppendLine($"    public static {destination} {methodName}(this {source} source)");
         sb.AppendLine("    {");
         sb.AppendLine($"        var destination = new {destination} {{ {string.Join(", ", initializerAssignments)} }};");
-        EmitAssignments(sb, remainingProperties, source);
+        EmitAssignments(sb, remainingProperties, source, useNullableReferenceTypes);
         sb.AppendLine("        return destination;");
         sb.AppendLine("    }");
         sb.AppendLine();
     }
 
-    // Emits one assignment statement per property, each optionally wrapped in an `if` guard.
-    // A property can be guarded by depth (MaxDepth, self-recursive properties only) and/or by
-    // its [MapCondition] method - both guards are ANDed into a single `if` when both apply,
-    // rather than nesting, since either one being false means the same thing: leave the
-    // destination property at its default.
+    // Depth guard and [MapCondition] guard are ANDed into one `if` when both apply - either
+    // being false means the same thing: leave the property at its default.
     private static void EmitAssignments(
         StringBuilder sb,
         IEnumerable<PropertyMappingModel> properties,
         string source,
+        bool useNullableReferenceTypes,
         MappingModel? recursionContext = null)
     {
         foreach (var property in properties)
@@ -122,8 +115,8 @@ internal static partial class MappingEmitter
             var isRecursive = recursionContext is not null && IsSelfRecursive(property, recursionContext);
 
             var value = isRecursive
-                ? BuildRecursiveValueExpression(property)
-                : BuildValueExpression(property, source);
+                ? BuildRecursiveValueExpression(property, useNullableReferenceTypes)
+                : BuildValueExpression(property, source, useNullableReferenceTypes);
 
             if (value is null)
                 continue;
@@ -165,15 +158,16 @@ internal static partial class MappingEmitter
             _ => false
         };
 
-    // Calls the private `(source, destination, depth)` overload directly, with `depth + 1`,
-    // instead of the normal public To{Dest}() entry point - going through the public method
-    // would reset the counter to 0 on every hop and defeat the guard entirely.
-    private static string? BuildRecursiveValueExpression(PropertyMappingModel property)
+    // Calls the private (source, destination, depth) overload directly with depth + 1 - the
+    // public entry point would reset the counter each hop. The trailing `!` suppresses a
+    // nullable warning; dropped entirely (not just no-op'd) when useNullableReferenceTypes is
+    // false, since the `!` syntax itself needs C# 8+.
+    private static string? BuildRecursiveValueExpression(PropertyMappingModel property, bool useNullableReferenceTypes)
         => property.Kind switch
         {
             PropertyMappingKind.Nested =>
                 property.SourceIsNullable
-                    ? $"source.{property.SourcePropertyName}?.To{property.DestinationType.SimpleName}(new {property.DestinationType.FullyQualifiedName}(), depth + 1)!"
+                    ? $"source.{property.SourcePropertyName}?.To{property.DestinationType.SimpleName}(new {property.DestinationType.FullyQualifiedName}(), depth + 1){(useNullableReferenceTypes ? "!" : "")}"
                     : $"source.{property.SourcePropertyName}.To{property.DestinationType.SimpleName}(new {property.DestinationType.FullyQualifiedName}(), depth + 1)",
 
             PropertyMappingKind.Enumerable when property.ElementDestinationType is not null =>
@@ -182,7 +176,7 @@ internal static partial class MappingEmitter
             _ => null
         };
 
-    private static string? BuildValueExpression(PropertyMappingModel property, string source)
+    private static string? BuildValueExpression(PropertyMappingModel property, string source, bool useNullableReferenceTypes)
         => property.Kind switch
         {
             PropertyMappingKind.Direct =>
@@ -190,7 +184,7 @@ internal static partial class MappingEmitter
 
             PropertyMappingKind.Nested =>
                 property.SourceIsNullable
-                    ? $"source.{property.SourcePropertyName}?.To{property.DestinationType.SimpleName}()!"
+                    ? $"source.{property.SourcePropertyName}?.To{property.DestinationType.SimpleName}(){(useNullableReferenceTypes ? "!" : "")}"
                     : $"source.{property.SourcePropertyName}.To{property.DestinationType.SimpleName}()",
 
             PropertyMappingKind.Enumerable =>

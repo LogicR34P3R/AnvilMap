@@ -3,11 +3,9 @@ using Microsoft.CodeAnalysis;
 
 namespace GeneratedMapper.Generator;
 
-// What MappingDiscovery reads straight off the user's attributes for one [MapTo] declaration -
-// unresolved and unvalidated. MappingResolver.Resolve turns this into a MappingModel by
-// matching every destination property against SourceSymbol/DestinationSymbol's actual members;
-// nothing here has been checked against the destination type yet (that's deliberately kept out
-// of this stage - see MappingResolver.cs).
+// What MappingDiscovery reads off the user's attributes for one [MapTo] - unresolved,
+// unvalidated. MappingResolver turns this into a MappingModel; nothing here is checked
+// against the destination type yet.
 internal sealed record MappingDeclaration(
     TypeModel Source,
     TypeModel Destination,

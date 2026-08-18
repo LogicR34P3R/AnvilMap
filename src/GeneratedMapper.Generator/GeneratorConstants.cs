@@ -1,11 +1,7 @@
 namespace GeneratedMapper.Generator;
 
-// Fully-qualified attribute names, matched as plain strings rather than referencing the
-// GeneratedMapper.Abstractions types directly - this project doesn't reference that assembly
-// at all (it only needs to recognize the attributes by name via Roslyn's
-// SyntaxProvider.ForAttributeWithMetadataName/AttributeClass.ToDisplayString(), both of which
-// work against any compilation containing a type with this exact name, including the user's
-// own compilation where these attributes actually live).
+// Matched by name, not by referencing GeneratedMapper.Abstractions directly - this project
+// doesn't reference that assembly at all.
 internal static class GeneratorConstants
 {
     public const string MapToAttribute = "GeneratedMapper.MapToAttribute";
