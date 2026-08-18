@@ -10,8 +10,9 @@ namespace GeneratedMapper.Generator;
 //   - MappingEmitter.Imperative.cs  - the To{Dest}() extension methods.
 //   - MappingEmitter.Projection.cs  - the ProjectTo{Dest}() IQueryable extension methods.
 //   - MappingEmitter.Dispatcher.cs  - the runtime dispatcher and IMapper service.
-// GM006 (below) is the one whole-mapping rejection, checked here since it needs two fields
-// together (DestinationIsInitOnly, DestinationHasParameterlessConstructor).
+// GM006 (below) is the one whole-mapping rejection, checked here since it needs three fields
+// together (DestinationIsInitOnly, DestinationHasParameterlessConstructor,
+// ConstructorParameterProperties).
 internal static partial class MappingEmitter
 {
     public static string Emit(
@@ -24,10 +25,12 @@ internal static partial class MappingEmitter
 
         foreach (var mapping in mappings)
         {
-            // Init-only property + no parameterless constructor (e.g. a positional record)
-            // can't be built at all, sequentially or via object-initializer - skipped rather
+            // Init-only property + no parameterless constructor + no matched constructor
+            // (see MappingResolver.TryMatchConstructor) can't be built at all - skipped rather
             // than emitting code that won't compile.
-            if (HasInitOnlyProperty(mapping) && !mapping.DestinationHasParameterlessConstructor)
+            if (HasInitOnlyProperty(mapping) &&
+                !mapping.DestinationHasParameterlessConstructor &&
+                mapping.ConstructorParameterProperties is null)
             {
                 report?.Invoke(Diagnostic.Create(
                     Diagnostics.NoParameterlessConstructor,

@@ -80,3 +80,17 @@ foreach (var post in entity.Posts)
 // there (GM005 at build time) and Body comes through for every row, draft or not.
 foreach (var post in projectedBlogs.SelectMany(b => b.Posts))
     Console.WriteLine($"[projection] '{post.Headline}' -> Body='{post.Body}'");
+
+Console.WriteLine();
+
+// PostSummaryDto is a positional record with no parameterless constructor - the generator
+// builds it via constructor arguments instead of object-initializer syntax, both imperatively
+// and in the SQL projection.
+var summary = entity.Posts.First().ToPostSummaryDto();
+Console.WriteLine($"[imperative] positional record: PostSummaryDto({summary.Id}, '{summary.Headline}')");
+
+var projectedSummaries = db.Posts.ProjectToPostSummaryDto().ToList();
+Console.WriteLine("Generated SQL for ProjectToPostSummaryDto():");
+Console.WriteLine(db.Posts.ProjectToPostSummaryDto().ToQueryString());
+foreach (var s in projectedSummaries)
+    Console.WriteLine($"[projection] PostSummaryDto({s.Id}, '{s.Headline}')");

@@ -49,7 +49,7 @@ internal static class Diagnostics
     public static readonly DiagnosticDescriptor NoParameterlessConstructor = new(
         id: "GM006",
         title: "Destination has no accessible parameterless constructor",
-        messageFormat: "Mapping from '{0}' to '{1}' was skipped entirely because the destination has an init-only property but no accessible parameterless constructor (for example, a positional record with required parameters). Add a parameterless constructor, give all positional parameters defaults, or restructure the destination.",
+        messageFormat: "Mapping from '{0}' to '{1}' was skipped entirely because the destination has an init-only property, no accessible parameterless constructor, and no constructor whose parameters could all be matched to already-mapped, unconditioned properties by name and type (for example, a positional record with a required parameter that has no matching source property, or one gated by [MapCondition]). Add a parameterless constructor, restructure the destination, or make every constructor parameter resolvable.",
         category: "GeneratedMapper",
         defaultSeverity: DiagnosticSeverity.Warning,
         isEnabledByDefault: true);

@@ -511,7 +511,7 @@ public sealed class UserDto
     }
 
     [Fact]
-    public void InitOnlyDestination_WithoutParameterlessConstructor_ReportsGM006AndSkipsMapping()
+    public void PositionalRecordDestination_AllPropertiesMatched_UsesConstructorArguments()
     {
         var result = GeneratorTestHelper.Run(@"
 using GeneratedMapper;
@@ -529,8 +529,119 @@ public sealed record UserDto(int Id, string Name);
 ");
 
         Assert.NotNull(result.GeneratedSource);
+        Assert.Contains("public static global::Sample.UserDto ToUserDto(this global::Sample.User source)", result.GeneratedSource);
+        Assert.Contains("var destination = new global::Sample.UserDto(source.Id, source.Name);", result.GeneratedSource);
+        Assert.Contains("source => new global::Sample.UserDto(source.Id, source.Name);", result.GeneratedSource);
+        Assert.DoesNotContain("ToUserDto(this global::Sample.User source, global::Sample.UserDto destination)", result.GeneratedSource);
+        Assert.Contains(result.GeneratorDiagnostics, d => d.Id == "GM008");
+        Assert.DoesNotContain(result.GeneratorDiagnostics, d => d.Id == "GM006");
+        AssertNoCompileErrors(result);
+    }
+
+    [Fact]
+    public void PositionalRecordDestination_WithUnmappableConstructorParameter_StillReportsGM006AndSkipsMapping()
+    {
+        var result = GeneratorTestHelper.Run(@"
+using GeneratedMapper;
+
+namespace Sample;
+
+[MapTo(typeof(UserDto))]
+public sealed class User
+{
+    public int Id { get; set; }
+}
+
+public sealed record UserDto(int Id, string Name);
+");
+
+        Assert.NotNull(result.GeneratedSource);
         Assert.Contains(result.GeneratorDiagnostics, d => d.Id == "GM006" && d.Severity == DiagnosticSeverity.Warning);
         Assert.DoesNotContain("ToUserDto", result.GeneratedSource);
+        AssertNoCompileErrors(result);
+    }
+
+    [Fact]
+    public void PositionalRecordDestination_WithMapConditionOnConstructorProperty_StillReportsGM006AndSkipsMapping()
+    {
+        var result = GeneratorTestHelper.Run(@"
+using GeneratedMapper;
+
+namespace Sample;
+
+[MapTo(typeof(UserDto))]
+[MapCondition(typeof(UserDto), nameof(UserDto.Name), nameof(ShouldMapName))]
+public sealed class User
+{
+    public int Id { get; set; }
+    public string Name { get; set; } = """";
+
+    public static bool ShouldMapName(User source) => true;
+}
+
+public sealed record UserDto(int Id, string Name);
+");
+
+        Assert.NotNull(result.GeneratedSource);
+        Assert.Contains(result.GeneratorDiagnostics, d => d.Id == "GM006" && d.Severity == DiagnosticSeverity.Warning);
+        Assert.DoesNotContain("ToUserDto", result.GeneratedSource);
+        AssertNoCompileErrors(result);
+    }
+
+    [Fact]
+    public void PositionalRecordDestination_WithExtraRegularProperty_AssignsExtraPropertyAfterConstruction()
+    {
+        var result = GeneratorTestHelper.Run(@"
+using GeneratedMapper;
+
+namespace Sample;
+
+[MapTo(typeof(UserDto))]
+public sealed class User
+{
+    public int Id { get; set; }
+    public string Name { get; set; } = """";
+    public string Nickname { get; set; } = """";
+}
+
+public sealed record UserDto(int Id, string Name)
+{
+    public string Nickname { get; set; } = """";
+}
+");
+
+        Assert.NotNull(result.GeneratedSource);
+        Assert.Contains("var destination = new global::Sample.UserDto(source.Id, source.Name);", result.GeneratedSource);
+        Assert.Contains("destination.Nickname = source.Nickname;", result.GeneratedSource);
+        AssertNoCompileErrors(result);
+    }
+
+    [Fact]
+    public void PositionalRecordDestination_WithExtraInitOnlyProperty_UsesTrailingObjectInitializer()
+    {
+        var result = GeneratorTestHelper.Run(@"
+using GeneratedMapper;
+
+namespace Sample;
+
+[MapTo(typeof(UserDto))]
+public sealed class User
+{
+    public int Id { get; set; }
+    public string Name { get; set; } = """";
+    public string Nickname { get; set; } = """";
+}
+
+public sealed record UserDto(int Id, string Name)
+{
+    public string Nickname { get; init; } = """";
+}
+");
+
+        Assert.NotNull(result.GeneratedSource);
+        Assert.Contains(
+            "var destination = new global::Sample.UserDto(source.Id, source.Name) { Nickname = source.Nickname };",
+            result.GeneratedSource);
         AssertNoCompileErrors(result);
     }
 

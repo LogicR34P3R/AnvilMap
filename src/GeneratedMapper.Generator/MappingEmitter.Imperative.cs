@@ -7,12 +7,17 @@ namespace GeneratedMapper.Generator;
 
 internal static partial class MappingEmitter
 {
-    // Emits To{Dest}(source) / To{Dest}(source, destination). Three shapes:
+    // Emits To{Dest}(source) / To{Dest}(source, destination). Four shapes:
     //   1. Plain: sequential `destination.Prop = value;` assignments.
     //   2. Self-recursive with MaxDepth: a private depth-counting overload guards a cyclic
     //      runtime graph against stack-overflowing.
-    //   3. Init-only destination: object-initializer syntax; the two-arg overload is omitted
-    //      (GM008), since init setters can't be assigned after construction.
+    //   3. Constructor-based (e.g. a positional record): required properties passed as
+    //      constructor arguments, any remainder via object-initializer/sequential assignment.
+    //      Checked first since ConstructorParameterProperties can be set independently of
+    //      whether any property happens to be init-only (see MappingResolver.TryMatchConstructor).
+    //   4. Init-only destination with a parameterless constructor: object-initializer syntax.
+    //   Shapes 3 and 4 both omit the two-arg overload (GM008), since neither can assign into
+    //   an already-constructed instance.
     private static void EmitMapping(
         StringBuilder sb,
         MappingModel mapping,
@@ -22,6 +27,12 @@ internal static partial class MappingEmitter
         var source = mapping.Source.FullyQualifiedName;
         var destination = mapping.Destination.FullyQualifiedName;
         var methodName = $"To{mapping.Destination.SimpleName}";
+
+        if (mapping.ConstructorParameterProperties is { Count: > 0 } constructorProperties)
+        {
+            EmitConstructorBasedMapping(sb, mapping, constructorProperties, source, destination, methodName, useNullableReferenceTypes, report);
+            return;
+        }
 
         var initOnlyProperties = mapping.Properties.Where(p => p.DestinationIsInitOnly).ToList();
 
@@ -95,6 +106,78 @@ internal static partial class MappingEmitter
         sb.AppendLine($"    public static {destination} {methodName}(this {source} source)");
         sb.AppendLine("    {");
         sb.AppendLine($"        var destination = new {destination} {{ {string.Join(", ", initializerAssignments)} }};");
+        EmitAssignments(sb, remainingProperties, source, useNullableReferenceTypes);
+        sb.AppendLine("        return destination;");
+        sb.AppendLine("    }");
+        sb.AppendLine();
+    }
+
+    // constructorProperties (in constructor-parameter order) become positional arguments;
+    // any other init-only property becomes a trailing object-initializer entry; any regular
+    // settable property is assigned afterward via EmitAssignments - the same three destinations
+    // a property could go to in the object-initializer-only shape, just with the constructor
+    // call taking some of them instead of `new Dest()`.
+    private static void EmitConstructorBasedMapping(
+        StringBuilder sb,
+        MappingModel mapping,
+        IReadOnlyList<string> constructorProperties,
+        string source,
+        string destination,
+        string methodName,
+        bool useNullableReferenceTypes,
+        System.Action<Diagnostic>? report)
+    {
+        report?.Invoke(Diagnostic.Create(
+            Diagnostics.TwoArgMapperOmittedInitOnly,
+            Location.None,
+            mapping.Source.DisplayName,
+            mapping.Destination.DisplayName,
+            methodName));
+
+        var byName = mapping.Properties.ToDictionary(p => p.DestinationPropertyName);
+        var constructorSet = new HashSet<string>(constructorProperties);
+
+        // Every name in constructorProperties is guaranteed present, unconditioned, and
+        // resolvable - MappingResolver.TryMatchConstructor only returns a match when that
+        // holds for all of them.
+        var constructorArgs = constructorProperties
+            .Select(name => BuildValueExpression(byName[name], source, useNullableReferenceTypes)!);
+
+        var initializerAssignments = new List<string>();
+
+        foreach (var property in mapping.Properties.Where(p => p.DestinationIsInitOnly && !constructorSet.Contains(p.DestinationPropertyName)))
+        {
+            if (property.ConditionMethodName is not null)
+            {
+                report?.Invoke(Diagnostic.Create(
+                    Diagnostics.ConditionOnInitOnlyPropertyUnsupported,
+                    Location.None,
+                    property.DestinationPropertyName,
+                    mapping.Source.DisplayName,
+                    mapping.Destination.DisplayName));
+                continue;
+            }
+
+            var value = BuildValueExpression(property, source, useNullableReferenceTypes);
+
+            if (value is null)
+                continue;
+
+            initializerAssignments.Add($"{property.DestinationPropertyName} = {value}");
+        }
+
+        var remainingProperties = mapping.Properties
+            .Where(p => !p.DestinationIsInitOnly && !constructorSet.Contains(p.DestinationPropertyName))
+            .ToList();
+
+        var constructorCall = $"new {destination}({string.Join(", ", constructorArgs)})";
+        var construction = initializerAssignments.Count > 0
+            ? $"{constructorCall} {{ {string.Join(", ", initializerAssignments)} }}"
+            : constructorCall;
+
+        sb.AppendLine($"    public static {destination} {methodName}(this {source} source)");
+        sb.AppendLine("    {");
+        sb.AppendLine($"        var destination = {construction};");
         EmitAssignments(sb, remainingProperties, source, useNullableReferenceTypes);
         sb.AppendLine("        return destination;");
         sb.AppendLine("    }");

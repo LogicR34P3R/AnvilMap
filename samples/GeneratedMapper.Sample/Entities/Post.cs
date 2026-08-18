@@ -5,6 +5,7 @@ namespace GeneratedMapper.Sample.Entities;
 
 [MapTo(typeof(PostDto), GenerateReverse = true)]
 [MapCondition(typeof(PostDto), nameof(PostDto.Body), nameof(ShouldMapBody))]
+[MapTo(typeof(PostSummaryDto))]
 public sealed class Post
 {
     public int Id { get; set; }

@@ -139,18 +139,70 @@ internal static class MappingResolver
                 resolution.DestinationShape));
         }
 
-        // Consumed by MappingEmitter: init-only property + no parameterless constructor (e.g.
-        // a positional record) means the mapping can't be built at all (GM006) - constructor
-        // parameter matching isn't implemented.
         var hasParameterlessConstructor = destination.InstanceConstructors
             .Any(c => c.Parameters.Length == 0);
+
+        // No parameterless constructor (e.g. a positional record): try to find a constructor
+        // whose parameters all correspond to properties already resolved above, so
+        // MappingEmitter can build `new Dest(args...)` instead of skipping the mapping (GM006).
+        var constructorParameterProperties = hasParameterlessConstructor
+            ? null
+            : TryMatchConstructor(destination, properties);
 
         return new MappingModel(
             declaration.Source,
             declaration.Destination,
             properties,
             hasParameterlessConstructor,
-            declaration.MaxDepth);
+            declaration.MaxDepth,
+            constructorParameterProperties);
+    }
+
+    // Only matches a constructor when *every* parameter resolves to an already-mapped,
+    // unconditioned property of the exact same type - falling back to null (GM006 skip) on
+    // any ambiguity is safer than guessing wrong and emitting code that double-assigns or
+    // misses a required argument. Excludes the compiler-synthesized record copy constructor
+    // (single parameter of the destination's own type) and prefers the constructor with the
+    // most parameters when several match, since that's the positional one for a typical record.
+    private static IReadOnlyList<string>? TryMatchConstructor(
+        INamedTypeSymbol destination,
+        IReadOnlyList<PropertyMappingModel> properties)
+    {
+        var resolvedByName = properties.ToDictionary(p => p.DestinationPropertyName);
+
+        var candidates = destination.InstanceConstructors
+            .Where(c => c.DeclaredAccessibility == Accessibility.Public && c.Parameters.Length > 0)
+            .Where(c => !(c.Parameters.Length == 1 && SymbolEqualityComparer.Default.Equals(c.Parameters[0].Type, destination)))
+            .OrderByDescending(c => c.Parameters.Length);
+
+        foreach (var constructor in candidates)
+        {
+            var parameterNames = new List<string>(constructor.Parameters.Length);
+            var isMatch = true;
+
+            foreach (var parameter in constructor.Parameters)
+            {
+                var property = destination.GetMembers(parameter.Name)
+                    .OfType<IPropertySymbol>()
+                    .FirstOrDefault(p => !p.IsStatic);
+
+                if (property is null ||
+                    !SymbolEqualityComparer.Default.Equals(property.Type, parameter.Type) ||
+                    !resolvedByName.TryGetValue(parameter.Name, out var resolved) ||
+                    resolved.ConditionMethodName is not null)
+                {
+                    isMatch = false;
+                    break;
+                }
+
+                parameterNames.Add(parameter.Name);
+            }
+
+            if (isMatch)
+                return parameterNames;
+        }
+
+        return null;
     }
 
     // Checked in order: identical type -> direct; enumerable with matching/mapped element

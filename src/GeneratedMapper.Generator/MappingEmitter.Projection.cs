@@ -56,6 +56,14 @@ internal static partial class MappingEmitter
         if (!visiting.Add(pairKey))
             return null;
 
+        // Non-null only for a destination without a parameterless constructor (e.g. a
+        // positional record) - see MappingResolver.TryMatchConstructor. Every name in it is
+        // guaranteed unconditioned, so none of them can hit the GM005 branch below.
+        var constructorSet = mapping.ConstructorParameterProperties is { Count: > 0 } names
+            ? new HashSet<string>(names)
+            : null;
+
+        var valueByProperty = new Dictionary<string, string>();
         var assignments = new List<string>();
 
         foreach (var property in mapping.Properties)
@@ -96,11 +104,23 @@ internal static partial class MappingEmitter
                 return null;
             }
 
-            assignments.Add($"{property.DestinationPropertyName} = {valueExpr}");
+            if (constructorSet is not null && constructorSet.Contains(property.DestinationPropertyName))
+                valueByProperty[property.DestinationPropertyName] = valueExpr;
+            else
+                assignments.Add($"{property.DestinationPropertyName} = {valueExpr}");
         }
 
         visiting.Remove(pairKey);
-        return $"new {mapping.Destination.FullyQualifiedName} {{ {string.Join(", ", assignments)} }}";
+
+        if (constructorSet is null)
+            return $"new {mapping.Destination.FullyQualifiedName} {{ {string.Join(", ", assignments)} }}";
+
+        var constructorArgs = new List<string>(mapping.ConstructorParameterProperties!.Count);
+        foreach (var name in mapping.ConstructorParameterProperties!)
+            constructorArgs.Add(valueByProperty[name]);
+
+        var constructorCall = $"new {mapping.Destination.FullyQualifiedName}({string.Join(", ", constructorArgs)})";
+        return assignments.Count > 0 ? $"{constructorCall} {{ {string.Join(", ", assignments)} }}" : constructorCall;
     }
 
     private static string? BuildNestedProjection(
