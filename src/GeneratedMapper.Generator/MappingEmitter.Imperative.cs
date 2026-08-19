@@ -260,7 +260,8 @@ internal static partial class MappingEmitter
         };
 
     private static string? BuildValueExpression(PropertyMappingModel property, string source, bool useNullableReferenceTypes)
-        => property.Kind switch
+    {
+        var value = property.Kind switch
         {
             PropertyMappingKind.Direct =>
                 $"source.{property.SourcePropertyName}",
@@ -278,6 +279,13 @@ internal static partial class MappingEmitter
 
             _ => null
         };
+
+        // Set only for Direct/Converted (see PropertyMappingModel) - [MapDefault]'s substitute
+        // value, applied via `??` rather than assigned unconditionally.
+        return value is not null && property.DefaultValueLiteral is not null
+            ? $"{value} ?? {property.DefaultValueLiteral}"
+            : value;
+    }
 
     private static string? EmitEnumerableImperativeValue(PropertyMappingModel property)
     {

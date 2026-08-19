@@ -104,6 +104,11 @@ internal static partial class MappingEmitter
                 return null;
             }
 
+            // Set only for Direct/Converted (see PropertyMappingModel) - [MapDefault]'s
+            // substitute value. `??` is Expression.Coalesce, translated as SQL COALESCE.
+            if (property.DefaultValueLiteral is not null)
+                valueExpr = $"{valueExpr} ?? {property.DefaultValueLiteral}";
+
             if (constructorSet is not null && constructorSet.Contains(property.DestinationPropertyName))
                 valueByProperty[property.DestinationPropertyName] = valueExpr;
             else

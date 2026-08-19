@@ -1343,6 +1343,325 @@ public sealed class UserDto
         AssertNoCompileErrors(result);
     }
 
+    [Fact]
+    public void MapDefault_SubstitutesNullOnDirectMapping_ImperativeAndProjection()
+    {
+        var result = GeneratorTestHelper.Run(@"
+using GeneratedMapper;
+
+namespace Sample;
+
+[MapTo(typeof(UserDto))]
+[MapDefault(typeof(UserDto), nameof(UserDto.Name), ""Unknown"")]
+public sealed class User
+{
+    public string? Name { get; set; }
+}
+
+public sealed class UserDto
+{
+    public string Name { get; set; } = """";
+}
+");
+
+        Assert.NotNull(result.GeneratedSource);
+        Assert.Contains("destination.Name = source.Name ?? \"Unknown\";", result.GeneratedSource);
+        Assert.Contains("Name = source.Name ?? \"Unknown\"", result.GeneratedSource);
+        AssertNoCompileErrors(result);
+    }
+
+    [Fact]
+    public void MapDefault_AppliesToConvertedProperty()
+    {
+        var result = GeneratorTestHelper.Run(@"
+using GeneratedMapper;
+
+namespace Sample;
+
+[MapTo(typeof(UserDto))]
+[MapUsing(typeof(UserDto), nameof(UserDto.FullName), nameof(ComputeFullName))]
+[MapDefault(typeof(UserDto), nameof(UserDto.FullName), ""N/A"")]
+public sealed class User
+{
+    public string? FirstName { get; set; }
+
+    public static string? ComputeFullName(User source) => source.FirstName;
+}
+
+public sealed class UserDto
+{
+    public string FullName { get; set; } = """";
+}
+");
+
+        Assert.NotNull(result.GeneratedSource);
+        Assert.Contains("destination.FullName = global::Sample.User.ComputeFullName(source) ?? \"N/A\";", result.GeneratedSource);
+        Assert.Contains("FullName = global::Sample.User.ComputeFullName(source) ?? \"N/A\"", result.GeneratedSource);
+        AssertNoCompileErrors(result);
+    }
+
+    [Fact]
+    public void MapDefault_SupportsNullableValueTypeWithNumericDefault()
+    {
+        var result = GeneratorTestHelper.Run(@"
+using GeneratedMapper;
+
+namespace Sample;
+
+[MapTo(typeof(UserDto))]
+[MapDefault(typeof(UserDto), nameof(UserDto.Age), 18)]
+public sealed class User
+{
+    public int? Age { get; set; }
+}
+
+public sealed class UserDto
+{
+    public int? Age { get; set; }
+}
+");
+
+        Assert.NotNull(result.GeneratedSource);
+        Assert.Contains("destination.Age = source.Age ?? 18;", result.GeneratedSource);
+        AssertNoCompileErrors(result);
+    }
+
+    [Fact]
+    public void MapDefault_CombinedWithMapCondition_GatesTheDefaultedValue()
+    {
+        var result = GeneratorTestHelper.Run(@"
+using GeneratedMapper;
+
+namespace Sample;
+
+[MapTo(typeof(UserDto))]
+[MapCondition(typeof(UserDto), nameof(UserDto.Name), nameof(ShouldMapName))]
+[MapDefault(typeof(UserDto), nameof(UserDto.Name), ""Unknown"")]
+public sealed class User
+{
+    public string? Name { get; set; }
+    public bool IsActive { get; set; }
+
+    public static bool ShouldMapName(User source) => source.IsActive;
+}
+
+public sealed class UserDto
+{
+    public string Name { get; set; } = """";
+}
+");
+
+        Assert.NotNull(result.GeneratedSource);
+        Assert.Contains("if (global::Sample.User.ShouldMapName(source))", result.GeneratedSource);
+        Assert.Contains("destination.Name = source.Name ?? \"Unknown\";", result.GeneratedSource);
+        AssertNoCompileErrors(result);
+    }
+
+    [Fact]
+    public void MapDefault_IgnoredWhenConstantIsNotAFormattableKind()
+    {
+        var result = GeneratorTestHelper.Run(@"
+using GeneratedMapper;
+
+namespace Sample;
+
+[MapTo(typeof(UserDto))]
+[MapDefault(typeof(UserDto), nameof(UserDto.Name), typeof(string))]
+public sealed class User
+{
+    public string? Name { get; set; }
+}
+
+public sealed class UserDto
+{
+    public string Name { get; set; } = """";
+}
+");
+
+        Assert.NotNull(result.GeneratedSource);
+        Assert.Contains("destination.Name = source.Name;", result.GeneratedSource);
+        Assert.DoesNotContain("??", result.GeneratedSource);
+        AssertNoCompileErrors(result);
+    }
+
+    [Fact]
+    public void MapDefault_IgnoredOnNonNullableValueType()
+    {
+        var result = GeneratorTestHelper.Run(@"
+using GeneratedMapper;
+
+namespace Sample;
+
+[MapTo(typeof(UserDto))]
+[MapDefault(typeof(UserDto), nameof(UserDto.Id), 42)]
+public sealed class User
+{
+    public int Id { get; set; }
+}
+
+public sealed class UserDto
+{
+    public int Id { get; set; }
+}
+");
+
+        Assert.NotNull(result.GeneratedSource);
+        Assert.Contains("destination.Id = source.Id;", result.GeneratedSource);
+        AssertNoCompileErrors(result);
+    }
+
+    [Fact]
+    public void MapDefault_DuplicateOnSameProperty_DoesNotCrashTheGenerator_LastWins()
+    {
+        var result = GeneratorTestHelper.Run(@"
+using GeneratedMapper;
+
+namespace Sample;
+
+[MapTo(typeof(UserDto))]
+[MapDefault(typeof(UserDto), nameof(UserDto.Name), ""First"")]
+[MapDefault(typeof(UserDto), nameof(UserDto.Name), ""Second"")]
+public sealed class User
+{
+    public string? Name { get; set; }
+}
+
+public sealed class UserDto
+{
+    public string Name { get; set; } = """";
+}
+");
+
+        Assert.NotNull(result.GeneratedSource);
+        Assert.DoesNotContain(result.GeneratorDiagnostics, d => d.Id == "CS8785");
+        Assert.Contains("destination.Name = source.Name ?? \"Second\";", result.GeneratedSource);
+        AssertNoCompileErrors(result);
+    }
+
+    [Fact]
+    public void MapCondition_DuplicateOnSameProperty_DoesNotCrashTheGenerator_LastWins()
+    {
+        var result = GeneratorTestHelper.Run(@"
+using GeneratedMapper;
+
+namespace Sample;
+
+[MapTo(typeof(UserDto))]
+[MapCondition(typeof(UserDto), nameof(UserDto.Name), nameof(First))]
+[MapCondition(typeof(UserDto), nameof(UserDto.Name), nameof(Second))]
+public sealed class User
+{
+    public string Name { get; set; } = """";
+
+    public static bool First(User source) => true;
+    public static bool Second(User source) => true;
+}
+
+public sealed class UserDto
+{
+    public string Name { get; set; } = """";
+}
+");
+
+        Assert.NotNull(result.GeneratedSource);
+        Assert.DoesNotContain(result.GeneratorDiagnostics, d => d.Id == "CS8785");
+        Assert.Contains("global::Sample.User.Second(source)", result.GeneratedSource);
+        Assert.DoesNotContain("global::Sample.User.First(source)", result.GeneratedSource);
+        AssertNoCompileErrors(result);
+    }
+
+    [Fact]
+    public void MapDefault_IgnoredOnNestedProperty()
+    {
+        var result = GeneratorTestHelper.Run(@"
+using GeneratedMapper;
+
+namespace Sample;
+
+[MapTo(typeof(AddressDto))]
+public sealed class Address
+{
+    public string City { get; set; } = """";
+}
+
+[MapTo(typeof(UserDto))]
+[MapDefault(typeof(UserDto), nameof(UserDto.Address), ""Unknown"")]
+public sealed class User
+{
+    public Address Address { get; set; } = new();
+}
+
+public sealed class AddressDto
+{
+    public string City { get; set; } = """";
+}
+
+public sealed class UserDto
+{
+    public AddressDto Address { get; set; } = new();
+}
+");
+
+        Assert.NotNull(result.GeneratedSource);
+        Assert.Contains("destination.Address = source.Address.ToAddressDto();", result.GeneratedSource);
+        AssertNoCompileErrors(result);
+    }
+
+    [Fact]
+    public void MapDefault_SupportsEnumConstant()
+    {
+        var result = GeneratorTestHelper.Run(@"
+using GeneratedMapper;
+
+namespace Sample;
+
+public enum UserStatus { Unknown, Active }
+
+[MapTo(typeof(UserDto))]
+[MapDefault(typeof(UserDto), nameof(UserDto.Status), UserStatus.Active)]
+public sealed class User
+{
+    public UserStatus? Status { get; set; }
+}
+
+public sealed class UserDto
+{
+    public UserStatus? Status { get; set; }
+}
+");
+
+        Assert.NotNull(result.GeneratedSource);
+        Assert.Contains("destination.Status = source.Status ?? global::Sample.UserStatus.Active;", result.GeneratedSource);
+        AssertNoCompileErrors(result);
+    }
+
+    [Fact]
+    public void MapDefault_NotAutoReversedByGenerateReverse()
+    {
+        var result = GeneratorTestHelper.Run(@"
+using GeneratedMapper;
+
+namespace Sample;
+
+[MapTo(typeof(UserDto), GenerateReverse = true)]
+[MapDefault(typeof(UserDto), nameof(UserDto.Name), ""Unknown"")]
+public sealed class User
+{
+    public string? Name { get; set; }
+}
+
+public sealed class UserDto
+{
+    public string? Name { get; set; }
+}
+");
+
+        Assert.NotNull(result.GeneratedSource);
+        Assert.Contains("destination.Name = source.Name ?? \"Unknown\";", result.GeneratedSource);
+        Assert.Contains("destination.Name = source.Name;", result.GeneratedSource);
+        AssertNoCompileErrors(result);
+    }
+
     private static void AssertNoCompileErrors(GeneratorTestResult result)
     {
         var errors = result.CompilationDiagnostics

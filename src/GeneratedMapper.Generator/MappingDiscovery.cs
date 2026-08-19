@@ -2,6 +2,7 @@ using System.Collections.Generic;
 using System.Collections.Immutable;
 using System.Linq;
 using Microsoft.CodeAnalysis;
+using Microsoft.CodeAnalysis.CSharp;
 
 namespace GeneratedMapper.Generator;
 
@@ -30,6 +31,10 @@ internal static class MappingDiscovery
 
         var mapUsingAttributes = sourceSymbol.GetAttributes()
             .Where(a => a.AttributeClass?.ToDisplayString() == GeneratorConstants.MapUsingAttribute)
+            .ToArray();
+
+        var mapDefaultAttributes = sourceSymbol.GetAttributes()
+            .Where(a => a.AttributeClass?.ToDisplayString() == GeneratorConstants.MapDefaultAttribute)
             .ToArray();
 
         var result = ImmutableArray.CreateBuilder<MappingDeclaration>();
@@ -110,6 +115,27 @@ internal static class MappingDiscovery
                 }
             }
 
+            var explicitDefaults = new List<ExplicitDefaultMapping>();
+
+            foreach (var attribute in mapDefaultAttributes)
+            {
+                if (attribute.ConstructorArguments.Length != 3 ||
+                    attribute.ConstructorArguments[0].Value is not INamedTypeSymbol defaultDestination)
+                    continue;
+
+                if (!SymbolEqualityComparer.Default.Equals(destination, defaultDestination))
+                    continue;
+
+                var destinationProperty = attribute.ConstructorArguments[1].Value?.ToString();
+                var literal = FormatDefaultValueLiteral(attribute.ConstructorArguments[2]);
+
+                if (!string.IsNullOrWhiteSpace(destinationProperty) && literal is not null)
+                {
+                    explicitDefaults.Add(
+                        new ExplicitDefaultMapping(destinationProperty!, literal));
+                }
+            }
+
             var generateReverse = mapTo.NamedArguments
                 .FirstOrDefault(x => x.Key == "GenerateReverse")
                 .Value.Value as bool? ?? false;
@@ -127,9 +153,39 @@ internal static class MappingDiscovery
                 explicitProperties,
                 explicitConditions,
                 explicitConverters,
+                explicitDefaults,
                 maxDepth));
         }
 
         return result.ToImmutable();
+    }
+
+    // A [MapDefault] constant is limited to what Roslyn allows as an attribute argument:
+    // numeric/string/bool/char/enum, or an array/typeof/Error TypedConstant that this doesn't
+    // attempt to format. Returning null for those means the [MapDefault] is silently skipped
+    // (MappingResolver only applies a default it actually has a literal for) rather than
+    // guessing at syntax that might not compile.
+    private static string? FormatDefaultValueLiteral(TypedConstant constant)
+    {
+        if (constant.IsNull)
+            return "null";
+
+        if (constant.Kind == TypedConstantKind.Primitive)
+            return SymbolDisplay.FormatPrimitive(constant.Value!, quoteStrings: true, useHexadecimalNumbers: false);
+
+        if (constant.Kind == TypedConstantKind.Enum && constant.Type is INamedTypeSymbol enumType)
+        {
+            var member = enumType.GetMembers()
+                .OfType<IFieldSymbol>()
+                .FirstOrDefault(f => f.HasConstantValue && Equals(f.ConstantValue, constant.Value));
+
+            var qualifiedType = enumType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
+
+            return member is not null
+                ? $"{qualifiedType}.{member.Name}"
+                : $"({qualifiedType}){constant.Value}";
+        }
+
+        return null;
     }
 }
