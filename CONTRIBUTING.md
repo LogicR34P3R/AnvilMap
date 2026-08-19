@@ -5,12 +5,14 @@
 ```
 dotnet build GeneratedMapper.sln
 dotnet test tests/GeneratedMapper.Generator.Tests
+dotnet test tests/GeneratedMapper.CodeFixes.Tests
 dotnet test benchmarks/GeneratedMapper.Benchmarks.ParityTests
 ```
 
-The second command covers the generator itself; the third covers the AutoMapper comparison's
-correctness checks (not the BenchmarkDotNet suite, which is a separate, manually-run thing —
-see `benchmarks/GeneratedMapper.Benchmarks`).
+The second command covers the generator itself; the third covers the IDE code fixes
+(`src/GeneratedMapper.CodeFixes`); the fourth covers the AutoMapper comparison's correctness
+checks (not the BenchmarkDotNet suite, which is a separate, manually-run thing — see
+`benchmarks/GeneratedMapper.Benchmarks`).
 
 ## Adding a new diagnostic
 
