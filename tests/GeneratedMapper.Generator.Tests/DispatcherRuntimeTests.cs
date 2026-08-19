@@ -534,6 +534,280 @@ public sealed class UserDto
         Assert.Equal("Grace Hopper", userDtoType.GetProperty("FullName")!.GetValue(dto));
     }
 
+    [Fact]
+    public void MapDefault_RuntimeSubstitutesNullValue()
+    {
+        const string source = @"
+using GeneratedMapper;
+
+namespace Sample;
+
+[MapTo(typeof(UserDto))]
+[MapDefault(typeof(UserDto), nameof(UserDto.Name), ""Unknown"")]
+public sealed class User
+{
+    public string? Name { get; set; }
+}
+
+public sealed class UserDto
+{
+    public string Name { get; set; } = """";
+}
+";
+
+        var result = GeneratorTestHelper.Run(source);
+        Assert.NotNull(result.Assembly);
+
+        var userType = result.Assembly!.GetType("Sample.User")!;
+        var user = Activator.CreateInstance(userType)!;
+        userType.GetProperty("Name")!.SetValue(user, null);
+
+        var toDto = GetMappingsType(result.Assembly!).GetMethod("ToUserDto", new[] { userType })!;
+        var dto = toDto.Invoke(null, new[] { user });
+
+        var userDtoType = result.Assembly!.GetType("Sample.UserDto")!;
+        Assert.Equal("Unknown", userDtoType.GetProperty("Name")!.GetValue(dto));
+    }
+
+    [Fact]
+    public void MapDefault_RuntimeDoesNotOverrideANonNullValue()
+    {
+        const string source = @"
+using GeneratedMapper;
+
+namespace Sample;
+
+[MapTo(typeof(UserDto))]
+[MapDefault(typeof(UserDto), nameof(UserDto.Name), ""Unknown"")]
+public sealed class User
+{
+    public string? Name { get; set; }
+}
+
+public sealed class UserDto
+{
+    public string Name { get; set; } = """";
+}
+";
+
+        var result = GeneratorTestHelper.Run(source);
+        Assert.NotNull(result.Assembly);
+
+        var userType = result.Assembly!.GetType("Sample.User")!;
+        var user = Activator.CreateInstance(userType)!;
+        userType.GetProperty("Name")!.SetValue(user, "Ada");
+
+        var toDto = GetMappingsType(result.Assembly!).GetMethod("ToUserDto", new[] { userType })!;
+        var dto = toDto.Invoke(null, new[] { user });
+
+        var userDtoType = result.Assembly!.GetType("Sample.UserDto")!;
+        Assert.Equal("Ada", userDtoType.GetProperty("Name")!.GetValue(dto));
+    }
+
+    [Fact]
+    public void MapDefault_ProjectionExpressionAppliesCoalesceWhenCompiledAndInvoked()
+    {
+        const string source = @"
+using GeneratedMapper;
+
+namespace Sample;
+
+[MapTo(typeof(UserDto))]
+[MapDefault(typeof(UserDto), nameof(UserDto.Name), ""Unknown"")]
+public sealed class User
+{
+    public string? Name { get; set; }
+}
+
+public sealed class UserDto
+{
+    public string Name { get; set; } = """";
+}
+";
+
+        var result = GeneratorTestHelper.Run(source);
+        Assert.NotNull(result.Assembly);
+
+        var projectionField = GetMappingsType(result.Assembly!).GetField("ToUserDtoProjection")!;
+        var projectionExpression = (System.Linq.Expressions.LambdaExpression)projectionField.GetValue(null)!;
+        var compiled = projectionExpression.Compile();
+
+        var userType = result.Assembly!.GetType("Sample.User")!;
+        var user = Activator.CreateInstance(userType)!;
+        userType.GetProperty("Name")!.SetValue(user, null);
+
+        var dto = compiled.DynamicInvoke(user);
+
+        var userDtoType = result.Assembly!.GetType("Sample.UserDto")!;
+        Assert.Equal("Unknown", userDtoType.GetProperty("Name")!.GetValue(dto));
+    }
+
+    [Fact]
+    public void MapDefault_RuntimeAppliesToAConvertedProperty()
+    {
+        const string source = @"
+using GeneratedMapper;
+
+namespace Sample;
+
+[MapTo(typeof(UserDto))]
+[MapUsing(typeof(UserDto), nameof(UserDto.FullName), nameof(ComputeFullName))]
+[MapDefault(typeof(UserDto), nameof(UserDto.FullName), ""N/A"")]
+public sealed class User
+{
+    public string? FirstName { get; set; }
+
+    public static string? ComputeFullName(User source) => source.FirstName;
+}
+
+public sealed class UserDto
+{
+    public string FullName { get; set; } = """";
+}
+";
+
+        var result = GeneratorTestHelper.Run(source);
+        Assert.NotNull(result.Assembly);
+
+        var userType = result.Assembly!.GetType("Sample.User")!;
+        var user = Activator.CreateInstance(userType)!;
+        userType.GetProperty("FirstName")!.SetValue(user, null);
+
+        var toDto = GetMappingsType(result.Assembly!).GetMethod("ToUserDto", new[] { userType })!;
+        var dto = toDto.Invoke(null, new[] { user });
+
+        var userDtoType = result.Assembly!.GetType("Sample.UserDto")!;
+        Assert.Equal("N/A", userDtoType.GetProperty("FullName")!.GetValue(dto));
+    }
+
+    [Fact]
+    public void MapDefault_RuntimeCombinedWithMapCondition_AppliesDefaultOnlyWhenConditionPasses()
+    {
+        const string source = @"
+using GeneratedMapper;
+
+namespace Sample;
+
+[MapTo(typeof(UserDto))]
+[MapCondition(typeof(UserDto), nameof(UserDto.Name), nameof(ShouldMapName))]
+[MapDefault(typeof(UserDto), nameof(UserDto.Name), ""Unknown"")]
+public sealed class User
+{
+    public string? Name { get; set; }
+    public bool IsActive { get; set; }
+
+    public static bool ShouldMapName(User source) => source.IsActive;
+}
+
+public sealed class UserDto
+{
+    public string Name { get; set; } = ""untouched"";
+}
+";
+
+        var result = GeneratorTestHelper.Run(source);
+        Assert.NotNull(result.Assembly);
+
+        var userType = result.Assembly!.GetType("Sample.User")!;
+        var userDtoType = result.Assembly!.GetType("Sample.UserDto")!;
+        var toDto = GetMappingsType(result.Assembly!).GetMethod("ToUserDto", new[] { userType })!;
+
+        var activeUser = Activator.CreateInstance(userType)!;
+        userType.GetProperty("IsActive")!.SetValue(activeUser, true);
+        userType.GetProperty("Name")!.SetValue(activeUser, null);
+        var activeDto = toDto.Invoke(null, new[] { activeUser });
+        Assert.Equal("Unknown", userDtoType.GetProperty("Name")!.GetValue(activeDto));
+
+        var inactiveUser = Activator.CreateInstance(userType)!;
+        userType.GetProperty("IsActive")!.SetValue(inactiveUser, false);
+        userType.GetProperty("Name")!.SetValue(inactiveUser, null);
+        var inactiveDto = toDto.Invoke(null, new[] { inactiveUser });
+        Assert.Equal("untouched", userDtoType.GetProperty("Name")!.GetValue(inactiveDto));
+    }
+
+    [Fact]
+    public void MapDefault_RuntimeSupportsNullableValueTypeWithNumericDefault()
+    {
+        const string source = @"
+using GeneratedMapper;
+
+namespace Sample;
+
+[MapTo(typeof(UserDto))]
+[MapDefault(typeof(UserDto), nameof(UserDto.Age), 18)]
+public sealed class User
+{
+    public int? Age { get; set; }
+}
+
+public sealed class UserDto
+{
+    public int? Age { get; set; }
+}
+";
+
+        var result = GeneratorTestHelper.Run(source);
+        Assert.NotNull(result.Assembly);
+
+        var userType = result.Assembly!.GetType("Sample.User")!;
+        var userDtoType = result.Assembly!.GetType("Sample.UserDto")!;
+        var toDto = GetMappingsType(result.Assembly!).GetMethod("ToUserDto", new[] { userType })!;
+
+        var userWithNullAge = Activator.CreateInstance(userType)!;
+        userType.GetProperty("Age")!.SetValue(userWithNullAge, null);
+        var dtoWithDefault = toDto.Invoke(null, new[] { userWithNullAge });
+        Assert.Equal(18, userDtoType.GetProperty("Age")!.GetValue(dtoWithDefault));
+
+        var userWithAge = Activator.CreateInstance(userType)!;
+        userType.GetProperty("Age")!.SetValue(userWithAge, 25);
+        var dtoWithAge = toDto.Invoke(null, new[] { userWithAge });
+        Assert.Equal(25, userDtoType.GetProperty("Age")!.GetValue(dtoWithAge));
+    }
+
+    [Fact]
+    public void MapDefault_RuntimeHandlesStringDefaultContainingQuotes()
+    {
+        // The [MapDefault] argument in the target source needs to be a C# string literal whose
+        // *value* itself contains a double-quote (`Say "hi"`) - built via Replace on a
+        // placeholder rather than hand-escaped inside this file's own verbatim string, since
+        // nesting C# escaping two levels deep is exactly the kind of thing that's easy to get
+        // subtly wrong. Proves SymbolDisplay.FormatPrimitive re-escapes the value correctly on
+        // the way back out into the generated mapping code, not just that a plain word like
+        // "Unknown" (no embedded quotes) works.
+        var quotedDefaultLiteral = "\"Say \\\"hi\\\"\""; // literal C# source text: "Say \"hi\""
+
+        var source = @"
+using GeneratedMapper;
+
+namespace Sample;
+
+[MapTo(typeof(UserDto))]
+[MapDefault(typeof(UserDto), nameof(UserDto.Name), __DEFAULT__)]
+public sealed class User
+{
+    public string? Name { get; set; }
+}
+
+public sealed class UserDto
+{
+    public string Name { get; set; } = """";
+}
+".Replace("__DEFAULT__", quotedDefaultLiteral);
+
+        var result = GeneratorTestHelper.Run(source);
+        Assert.NotNull(result.Assembly);
+
+        var userType = result.Assembly!.GetType("Sample.User")!;
+        var user = Activator.CreateInstance(userType)!;
+        userType.GetProperty("Name")!.SetValue(user, null);
+
+        var toDto = GetMappingsType(result.Assembly!).GetMethod("ToUserDto", new[] { userType })!;
+        var dto = toDto.Invoke(null, new[] { user });
+
+        var userDtoType = result.Assembly!.GetType("Sample.UserDto")!;
+        Assert.Equal("Say \"hi\"", userDtoType.GetProperty("Name")!.GetValue(dto));
+    }
+
     private static Type GetMappingsType(Assembly assembly)
         => assembly.GetType("GeneratedMapper.GeneratedMappings")!;
 

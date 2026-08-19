@@ -9,4 +9,5 @@ internal static class GeneratorConstants
     public const string MapIgnoreAttribute = "GeneratedMapper.MapIgnoreAttribute";
     public const string MapConditionAttribute = "GeneratedMapper.MapConditionAttribute";
     public const string MapUsingAttribute = "GeneratedMapper.MapUsingAttribute";
+    public const string MapDefaultAttribute = "GeneratedMapper.MapDefaultAttribute";
 }

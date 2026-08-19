@@ -1,16 +1,17 @@
 using System;
 using System.Collections.Generic;
-using System.Collections.Immutable;
 using System.Linq;
 using Microsoft.CodeAnalysis;
-using Microsoft.CodeAnalysis.CSharp;
 
 namespace GeneratedMapper.Generator;
 
 // Matches a MappingDeclaration's properties against the destination type, producing a
 // MappingModel with one PropertyMappingModel per matched property; unmatched properties
-// become diagnostics instead. MappingEmitter never re-validates this.
-internal static class MappingResolver
+// become diagnostics instead. MappingEmitter never re-validates this. Split by concern across
+// MappingResolver.Kind.cs (type-compatibility), .Condition.cs ([MapCondition]), and
+// .Converter.cs ([MapUsing]) - this file holds the orchestrating Resolve loop and
+// constructor-matching only.
+internal static partial class MappingResolver
 {
     public static MappingModel Resolve(
         Compilation compilation,
@@ -21,14 +22,25 @@ internal static class MappingResolver
         var source = declaration.SourceSymbol;
         var destination = declaration.DestinationSymbol;
 
+        // GroupBy+Last, not ToDictionary: two attributes of the same kind naming the same
+        // destination property (AllowMultiple = true on all four) would otherwise throw
+        // ArgumentException ("duplicate key") and crash the *entire* generator run for every
+        // mapping in the compilation, not just this one. Last-declared wins instead.
         var explicitMappings = declaration.ExplicitProperties
-            .ToDictionary(x => x.DestinationProperty, x => x.SourceProperty);
+            .GroupBy(x => x.DestinationProperty)
+            .ToDictionary(g => g.Key, g => g.Last().SourceProperty);
 
         var explicitConditions = declaration.ExplicitConditions
-            .ToDictionary(x => x.DestinationProperty, x => x.ConditionMethodName);
+            .GroupBy(x => x.DestinationProperty)
+            .ToDictionary(g => g.Key, g => g.Last().ConditionMethodName);
 
         var explicitConverters = declaration.ExplicitConverters
-            .ToDictionary(x => x.DestinationProperty, x => x.ConverterMethodName);
+            .GroupBy(x => x.DestinationProperty)
+            .ToDictionary(g => g.Key, g => g.Last().ConverterMethodName);
+
+        var explicitDefaults = declaration.ExplicitDefaults
+            .GroupBy(x => x.DestinationProperty)
+            .ToDictionary(g => g.Key, g => g.Last().DefaultValueLiteral);
 
         // Write-only properties (no getter) can't be a mapping source, so excluded here.
         var sourceProperties = source.GetMembers()
@@ -66,6 +78,11 @@ internal static class MappingResolver
                 if (!converterCondition.Success)
                     continue;
 
+                var converterDefault = explicitDefaults.TryGetValue(destinationProperty.Name, out var converterDefaultLiteral)
+                    && CanCoalesceNull(destinationProperty.Type)
+                        ? converterDefaultLiteral
+                        : null;
+
                 properties.Add(new PropertyMappingModel(
                     string.Empty,
                     destinationProperty.Name,
@@ -75,7 +92,8 @@ internal static class MappingResolver
                     ConditionMethodName: converterCondition.MethodName,
                     ConditionAcceptsDestination: converterCondition.AcceptsDestination,
                     DestinationIsInitOnly: destinationProperty.SetMethod!.IsInitOnly,
-                    ConverterMethodName: converter));
+                    ConverterMethodName: converter,
+                    DefaultValueLiteral: converterDefault));
 
                 continue;
             }
@@ -124,6 +142,15 @@ internal static class MappingResolver
             var conditionMethodName = condition.MethodName;
             var conditionAcceptsDestination = condition.AcceptsDestination;
 
+            // Only a Direct match produces a plain value/reference expression a literal can
+            // meaningfully `??` against - a Nested/Enumerable value's own type can't be spelled
+            // as an attribute constant, so [MapDefault] is silently ignored there.
+            var propertyDefault = resolution.Kind == PropertyMappingKind.Direct &&
+                explicitDefaults.TryGetValue(destinationProperty.Name, out var defaultLiteral) &&
+                CanCoalesceNull(sourceProperty.Type)
+                    ? defaultLiteral
+                    : null;
+
             properties.Add(new PropertyMappingModel(
                 sourceProperty.Name,
                 destinationProperty.Name,
@@ -137,7 +164,8 @@ internal static class MappingResolver
                 conditionMethodName,
                 conditionAcceptsDestination,
                 destinationProperty.SetMethod!.IsInitOnly,
-                resolution.DestinationShape));
+                resolution.DestinationShape,
+                DefaultValueLiteral: propertyDefault));
         }
 
         var hasParameterlessConstructor = destination.InstanceConstructors
@@ -206,182 +234,16 @@ internal static class MappingResolver
         return null;
     }
 
-    // Checked in order: identical type -> direct; enumerable with matching/mapped element
-    // types -> Enumerable; same named type with a declared mapping -> Nested; otherwise an
-    // implicit conversion -> direct. Enumerable/Nested need `graph`, not just `declaration`,
-    // since the element/property type may have its own [MapTo] declared elsewhere.
-    private static KindResolution ResolveKind(
-        Compilation compilation,
-        MappingGraph graph,
-        ITypeSymbol source,
-        ITypeSymbol destination)
-    {
-        if (SymbolEqualityComparer.Default.Equals(source, destination))
-            return new KindResolution(PropertyMappingKind.Direct, null, null);
-
-        if (TryGetEnumerableElement(source, out var sourceElement) &&
-            TryGetEnumerableElement(destination, out var destinationElement))
-        {
-            var destinationShape = DetermineCollectionShape(destination);
-
-            if (SymbolEqualityComparer.Default.Equals(sourceElement, destinationElement))
-                return new KindResolution(PropertyMappingKind.Enumerable, sourceElement, destinationElement, destinationShape);
-
-            if (TryGetNamedType(sourceElement, out var sourceElementNamed) &&
-                TryGetNamedType(destinationElement, out var destinationElementNamed) &&
-                graph.TryGetMapping(
-                    sourceElementNamed.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat),
-                    destinationElementNamed.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat),
-                    out _))
-            {
-                return new KindResolution(PropertyMappingKind.Enumerable, sourceElement, destinationElement, destinationShape);
-            }
-        }
-
-        if (TryGetNamedType(source, out var sourceNamedType) &&
-            TryGetNamedType(destination, out var destinationNamedType) &&
-            graph.TryGetMapping(
-                sourceNamedType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat),
-                destinationNamedType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat),
-                out _))
-        {
-            return new KindResolution(PropertyMappingKind.Nested, null, null);
-        }
-
-        if (compilation is CSharpCompilation csharpCompilation)
-        {
-            var conversion = csharpCompilation.ClassifyConversion(source, destination);
-            if (conversion.IsImplicit)
-                return new KindResolution(PropertyMappingKind.Direct, null, null);
-        }
-
-        return new KindResolution(null, null, null);
-    }
-
-    // `null` Kind means "no strategy matched" - ResolveKind's caller turns that into GM003.
-    private readonly record struct KindResolution(
-        PropertyMappingKind? Kind,
-        ITypeSymbol? ElementSource,
-        ITypeSymbol? ElementDestination,
-        CollectionShape DestinationShape = CollectionShape.List);
-
-    // Only Array/HashSet need a non-default materialize call; everything else falls back to List.
-    private static CollectionShape DetermineCollectionShape(ITypeSymbol type)
-    {
-        if (type is IArrayTypeSymbol)
-            return CollectionShape.Array;
-
-        if (type is INamedTypeSymbol { IsGenericType: true } named &&
-            named.Name is "HashSet" or "ISet" or "IReadOnlySet")
-            return CollectionShape.HashSet;
-
-        foreach (var iface in type.AllInterfaces)
-        {
-            if (iface.Name is "ISet" or "IReadOnlySet")
-                return CollectionShape.HashSet;
-        }
-
-        return CollectionShape.List;
-    }
-
-    // Prefers the two-arg (TSource, TDestination?) signature over one-arg when both exist, so
-    // a condition can inspect the destination's current state.
-    private static ConditionResolution ResolveCondition(
-        INamedTypeSymbol source,
-        INamedTypeSymbol destination,
-        IPropertySymbol destinationProperty,
-        IReadOnlyDictionary<string, string> explicitConditions,
-        Action<Diagnostic>? report)
-    {
-        if (!explicitConditions.TryGetValue(destinationProperty.Name, out var conditionName))
-            return new ConditionResolution(true, null, false);
-
-        var candidates = source.GetMembers(conditionName)
-            .OfType<IMethodSymbol>()
-            .Where(m => m.IsStatic && m.ReturnType.SpecialType == SpecialType.System_Boolean)
-            .ToArray();
-
-        var twoArg = candidates.FirstOrDefault(m =>
-            m.Parameters.Length == 2 &&
-            SymbolEqualityComparer.Default.Equals(m.Parameters[0].Type, source) &&
-            SymbolEqualityComparer.Default.Equals(m.Parameters[1].Type, destination));
-
-        if (twoArg is not null)
-            return new ConditionResolution(true, conditionName, true);
-
-        var oneArg = candidates.FirstOrDefault(m =>
-            m.Parameters.Length == 1 &&
-            SymbolEqualityComparer.Default.Equals(m.Parameters[0].Type, source));
-
-        if (oneArg is not null)
-            return new ConditionResolution(true, conditionName, false);
-
-        // Properties let GeneratedMapper.CodeFixes locate the source type and generate a stub
-        // method without parsing the message text.
-        report?.Invoke(Diagnostic.Create(
-            Diagnostics.ConditionMethodNotFound,
-            destinationProperty.Locations.FirstOrDefault() ?? Location.None,
-            ImmutableDictionary<string, string?>.Empty
-                .Add("SourceMetadataName", GetMetadataName(source))
-                .Add("MethodName", conditionName),
-            source.ToDisplayString(),
-            destinationProperty.Name,
-            conditionName,
-            destination.ToDisplayString()));
-
-        return new ConditionResolution(false, null, false);
-    }
-
-    // Success = false means GM004 was already reported; caller skips the property.
-    private readonly record struct ConditionResolution(
-        bool Success,
-        string? MethodName,
-        bool AcceptsDestination);
-
-    // Prefers an exact return-type match, falling back to an implicit conversion.
-    private static string? ResolveConverter(
-        Compilation compilation,
-        INamedTypeSymbol source,
-        IPropertySymbol destinationProperty,
-        string converterMethodName,
-        Action<Diagnostic>? report)
-    {
-        var candidates = source.GetMembers(converterMethodName)
-            .OfType<IMethodSymbol>()
-            .Where(m => m.IsStatic &&
-                m.Parameters.Length == 1 &&
-                SymbolEqualityComparer.Default.Equals(m.Parameters[0].Type, source))
-            .ToArray();
-
-        var match = candidates.FirstOrDefault(m =>
-            SymbolEqualityComparer.Default.Equals(m.ReturnType, destinationProperty.Type));
-
-        if (match is null && compilation is CSharpCompilation csharpCompilation)
-        {
-            match = candidates.FirstOrDefault(m =>
-                csharpCompilation.ClassifyConversion(m.ReturnType, destinationProperty.Type).IsImplicit);
-        }
-
-        if (match is not null)
-            return converterMethodName;
-
-        report?.Invoke(Diagnostic.Create(
-            Diagnostics.ConverterMethodNotFound,
-            destinationProperty.Locations.FirstOrDefault() ?? Location.None,
-            ImmutableDictionary<string, string?>.Empty
-                .Add("SourceMetadataName", GetMetadataName(source))
-                .Add("MethodName", converterMethodName)
-                .Add("ReturnType", destinationProperty.Type.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)),
-            source.ToDisplayString(),
-            destinationProperty.Name,
-            converterMethodName,
-            destinationProperty.Type.ToDisplayString()));
-
-        return null;
-    }
+    // `??` only compiles against a reference type or Nullable<T> - a plain value type (int,
+    // a non-nullable struct) can never be null, so [MapDefault] against one is silently ignored
+    // rather than emitting code that fails to compile.
+    private static bool CanCoalesceNull(ITypeSymbol type)
+        => type.IsReferenceType || (type.IsValueType && type.OriginalDefinition.SpecialType == SpecialType.System_Nullable_T);
 
     // Compilation.GetTypeByMetadataName's expected format: '+' between nested types, '.'
-    // between namespace segments - unlike ToDisplayString, which uses '.' for both.
+    // between namespace segments - unlike ToDisplayString, which uses '.' for both. Shared by
+    // ResolveCondition and ResolveConverter (MappingResolver.Condition.cs / .Converter.cs) to
+    // populate the diagnostic Properties GeneratedMapper.CodeFixes reads.
     private static string GetMetadataName(INamedTypeSymbol type)
     {
         var name = type.MetadataName;
@@ -392,50 +254,5 @@ internal static class MappingResolver
         return type.ContainingNamespace is { IsGlobalNamespace: false } ns
             ? ns.ToDisplayString() + "." + name
             : name;
-    }
-
-    private static bool TryGetNamedType(ITypeSymbol type, out INamedTypeSymbol named)
-    {
-        if (type is INamedTypeSymbol n)
-        {
-            named = n;
-            return true;
-        }
-
-        named = null!;
-        return false;
-    }
-
-    // Named BCL collection types first, then a fallback scan of implemented interfaces for
-    // IEnumerable<T>, so custom collection types still resolve.
-    private static bool TryGetEnumerableElement(ITypeSymbol type, out ITypeSymbol element)
-    {
-        if (type is IArrayTypeSymbol array)
-        {
-            element = array.ElementType;
-            return true;
-        }
-
-        if (type is INamedTypeSymbol { IsGenericType: true } named &&
-            named.TypeArguments.Length == 1 &&
-            (named.Name is "IEnumerable" or "ICollection" or "IList" or "List"
-                or "IReadOnlyCollection" or "IReadOnlyList"
-                or "HashSet" or "ISet" or "IReadOnlySet"))
-        {
-            element = named.TypeArguments[0];
-            return true;
-        }
-
-        foreach (var iface in type.AllInterfaces)
-        {
-            if (iface.Name == "IEnumerable" && iface.TypeArguments.Length == 1)
-            {
-                element = iface.TypeArguments[0];
-                return true;
-            }
-        }
-
-        element = null!;
-        return false;
     }
 }
