@@ -3,7 +3,9 @@ namespace GeneratedMapper.Generator;
 // One resolved destination property. A flat record covering every Kind, so several fields
 // are only meaningful for specific Kind values (Element*/DestinationCollectionShape for
 // Enumerable, ConverterMethodName for Converted). MappingResolver only sets what applies;
-// every `Kind` switch in MappingEmitter.*.cs depends on that holding.
+// every `Kind` switch in MappingEmitter.*.cs depends on that holding. DefaultValueLiteral is
+// only ever set for Direct/Converted - MappingResolver already checked the value's type can
+// hold null, so MappingEmitter just splices it into a `?? literal` suffix unconditionally.
 internal sealed record PropertyMappingModel(
     string SourcePropertyName,
     string DestinationPropertyName,
@@ -17,4 +19,5 @@ internal sealed record PropertyMappingModel(
     bool ConditionAcceptsDestination = false,
     bool DestinationIsInitOnly = false,
     CollectionShape DestinationCollectionShape = CollectionShape.List,
-    string? ConverterMethodName = null);
+    string? ConverterMethodName = null,
+    string? DefaultValueLiteral = null);
