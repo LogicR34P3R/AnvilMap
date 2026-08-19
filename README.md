@@ -60,6 +60,19 @@ public sealed class User
 
 `[MapUsing]` maps a single destination property through a static conversion function instead of a direct/nested/enumerable match — useful when a destination property doesn't correspond to any single source property (a computed value, a combined field, a translated enum). `conditionMethod`/`converterMethod` must be a `static` method on the source type with signature `TDestinationProperty Method(TSource)` (an implicitly convertible return type is also accepted). It's honored by both the imperative mapper and SQL projections — for projections the call is inlined as-is, so it's your responsibility to keep the method translatable by EF Core's query provider. It can be combined with `[MapCondition]` on the same property (the condition gates whether the converted value is assigned). Like `[MapCondition]`, it is **not** auto-reversed by `GenerateReverse` — declare a separate `[MapUsing]` on the destination type if the reverse direction needs one too.
 
+### Default values
+
+```csharp
+[MapTo(typeof(UserDto))]
+[MapDefault(typeof(UserDto), nameof(UserDto.DisplayName), "Unknown")]
+public sealed class User
+{
+    public string? DisplayName { get; set; }
+}
+```
+
+`[MapDefault]` substitutes a constant when the matched value would otherwise be `null`, emitting `source.Prop ?? defaultValue` instead of a plain property access — a lighter alternative to `[MapUsing]` when all you need is a fallback value. It applies to a directly-matched property, or one computed via `[MapUsing]` on the same property; it has no effect on a nested/enumerable property or a non-nullable value type, since neither can meaningfully `?? ` against a constant. `defaultValue` is an attribute constructor argument, so it's limited to what Roslyn allows there — numeric, string, bool, char, or enum constants, not arbitrary expressions. Honored by both the imperative mapper and SQL projections (translated as `COALESCE`). Like `[MapCondition]`/`[MapUsing]`, it is **not** auto-reversed by `GenerateReverse`.
+
 ### Diagnostics
 
 `GM001` (destination property left unmapped), `GM002` (projection skipped — the mapping graph is cyclic; the imperative method is still generated), `GM003` (error — incompatible property types with no implicit conversion), `GM004` (error — `[MapCondition]` references a method that doesn't exist or has the wrong signature), `GM005` (a conditionally-mapped property was left out of a SQL projection), `GM006` (a mapping was skipped entirely because the destination has an init-only property, no accessible parameterless constructor, and no constructor whose parameters could all be matched to already-mapped, unconditioned properties), `GM007` (`[MapCondition]` on an init-only destination property isn't supported — the property was left out), `GM008` (the two-arg `To{Dest}(source, destination)` overload was omitted because the destination has init-only properties), `GM009` (error — `[MapUsing]` references a method that doesn't exist or has the wrong signature/return type).

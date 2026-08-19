@@ -1,6 +1,4 @@
-using System;
 using System.Collections.Generic;
-using System.Linq;
 
 namespace GeneratedMapper.Generator;
 
@@ -17,23 +15,7 @@ internal sealed class MappingGraph
         if (!declaration.GenerateReverse)
             return;
 
-        // Conditions/converters aren't auto-reversed - their methods are tied to the original
-        // source type. A reverse mapping needs its own [MapCondition]/[MapUsing].
-        var reverse = new MappingDeclaration(
-            declaration.Destination,
-            declaration.Source,
-            declaration.DestinationSymbol,
-            declaration.SourceSymbol,
-            false,
-            declaration.ExplicitProperties
-                .Select(x => new ExplicitPropertyMapping(
-                    x.DestinationProperty,
-                    x.SourceProperty))
-                .ToArray(),
-            Array.Empty<ExplicitConditionMapping>(),
-            Array.Empty<ExplicitConverterMapping>(),
-            declaration.MaxDepth);
-
+        var reverse = declaration.ToReverse();
         _mappings[(reverse.Source.FullyQualifiedName, reverse.Destination.FullyQualifiedName)] = reverse;
     }
 
