@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Collections.Immutable;
 using System.Linq;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
@@ -315,9 +316,14 @@ internal static class MappingResolver
         if (oneArg is not null)
             return new ConditionResolution(true, conditionName, false);
 
+        // Properties let GeneratedMapper.CodeFixes locate the source type and generate a stub
+        // method without parsing the message text.
         report?.Invoke(Diagnostic.Create(
             Diagnostics.ConditionMethodNotFound,
             destinationProperty.Locations.FirstOrDefault() ?? Location.None,
+            ImmutableDictionary<string, string?>.Empty
+                .Add("SourceMetadataName", GetMetadataName(source))
+                .Add("MethodName", conditionName),
             source.ToDisplayString(),
             destinationProperty.Name,
             conditionName,
@@ -362,12 +368,30 @@ internal static class MappingResolver
         report?.Invoke(Diagnostic.Create(
             Diagnostics.ConverterMethodNotFound,
             destinationProperty.Locations.FirstOrDefault() ?? Location.None,
+            ImmutableDictionary<string, string?>.Empty
+                .Add("SourceMetadataName", GetMetadataName(source))
+                .Add("MethodName", converterMethodName)
+                .Add("ReturnType", destinationProperty.Type.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)),
             source.ToDisplayString(),
             destinationProperty.Name,
             converterMethodName,
             destinationProperty.Type.ToDisplayString()));
 
         return null;
+    }
+
+    // Compilation.GetTypeByMetadataName's expected format: '+' between nested types, '.'
+    // between namespace segments - unlike ToDisplayString, which uses '.' for both.
+    private static string GetMetadataName(INamedTypeSymbol type)
+    {
+        var name = type.MetadataName;
+
+        for (var containing = type.ContainingType; containing is not null; containing = containing.ContainingType)
+            name = containing.MetadataName + "+" + name;
+
+        return type.ContainingNamespace is { IsGlobalNamespace: false } ns
+            ? ns.ToDisplayString() + "." + name
+            : name;
     }
 
     private static bool TryGetNamedType(ITypeSymbol type, out INamedTypeSymbol named)
