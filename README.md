@@ -73,9 +73,31 @@ public sealed class User
 
 `[MapDefault]` substitutes a constant when the matched value would otherwise be `null`, emitting `source.Prop ?? defaultValue` instead of a plain property access — a lighter alternative to `[MapUsing]` when all you need is a fallback value. It applies to a directly-matched property, or one computed via `[MapUsing]` on the same property; it has no effect on a nested/enumerable property or a non-nullable value type, since neither can meaningfully `?? ` against a constant. `defaultValue` is an attribute constructor argument, so it's limited to what Roslyn allows there — numeric, string, bool, char, or enum constants, not arbitrary expressions. Honored by both the imperative mapper and SQL projections (translated as `COALESCE`). Like `[MapCondition]`/`[MapUsing]`, it is **not** auto-reversed by `GenerateReverse`.
 
+### Naming-convention flattening
+
+```csharp
+[MapTo(typeof(UserDto))]
+public sealed class User
+{
+    public Address HomeAddress { get; set; } = new();
+}
+
+public sealed class Address
+{
+    public string City { get; set; } = "";
+}
+
+public sealed class UserDto
+{
+    public string HomeAddressCity { get; set; } = ""; // <- source.HomeAddress.City, no attribute needed
+}
+```
+
+When a destination property has no exact-name match and no explicit `[MapProperty]` override, the generator tries splitting its name at PascalCase boundaries against a chain of nested source properties — `HomeAddressCity` against `source.HomeAddress.City`, checking each segment by exact case-sensitive name. This is a fallback for the default name-matching path only; an explicit `[MapProperty]` source name must still be an exact top-level property name. Every *intermediate* segment in a matched chain must be non-nullable (a `?`-annotated or `Nullable<T>` intermediate is excluded from candidates entirely, rather than emitting an unguarded chain that could throw at runtime) — the leaf property's own nullability is unaffected by this and follows the same rules as a normal direct match. If a destination name splits more than one valid way (e.g. both `Home.AddressCity` and `HomeAddress.City` resolve), the match is ambiguous and the property is left unmapped (`GM010`) rather than guessing — add an explicit `[MapProperty]` to disambiguate. A flattened match resolves independently in each direction, so it is **not** auto-reversed by `GenerateReverse`: the reverse direction has no way to un-flatten a scalar back into constructing a nested object, and leaves the nested property unmapped (`GM001`) unless you supply one yourself. Since the matched chain is just a longer property-access expression, this works identically — with no extra codegen — in both the imperative mapper and `.ProjectTo{Destination}()`'s SQL projection (see the sample app's `Post.Author`/`PostDto.AuthorDisplayName`, an EF Core owned type flattened straight into a SQL column).
+
 ### Diagnostics
 
-`GM001` (destination property left unmapped), `GM002` (projection skipped — the mapping graph is cyclic; the imperative method is still generated), `GM003` (error — incompatible property types with no implicit conversion), `GM004` (error — `[MapCondition]` references a method that doesn't exist or has the wrong signature), `GM005` (a conditionally-mapped property was left out of a SQL projection), `GM006` (a mapping was skipped entirely because the destination has an init-only property, no accessible parameterless constructor, and no constructor whose parameters could all be matched to already-mapped, unconditioned properties), `GM007` (`[MapCondition]` on an init-only destination property isn't supported — the property was left out), `GM008` (the two-arg `To{Dest}(source, destination)` overload was omitted because the destination has init-only properties), `GM009` (error — `[MapUsing]` references a method that doesn't exist or has the wrong signature/return type).
+`GM001` (destination property left unmapped), `GM002` (projection skipped — the mapping graph is cyclic; the imperative method is still generated), `GM003` (error — incompatible property types with no implicit conversion), `GM004` (error — `[MapCondition]` references a method that doesn't exist or has the wrong signature), `GM005` (a conditionally-mapped property was left out of a SQL projection), `GM006` (a mapping was skipped entirely because the destination has an init-only property, no accessible parameterless constructor, and no constructor whose parameters could all be matched to already-mapped, unconditioned properties), `GM007` (`[MapCondition]` on an init-only destination property isn't supported — the property was left out), `GM008` (the two-arg `To{Dest}(source, destination)` overload was omitted because the destination has init-only properties), `GM009` (error — `[MapUsing]` references a method that doesn't exist or has the wrong signature/return type), `GM010` (a destination property's name matched more than one valid naming-convention-flattening path and was left unmapped).
 
 Diagnostic IDs are never reused, only retired, tracked via `src/GeneratedMapper.Generator/AnalyzerReleases.Shipped.md`/`.Unshipped.md` (mechanically enforced at build time — see `CONTRIBUTING.md`).
 
