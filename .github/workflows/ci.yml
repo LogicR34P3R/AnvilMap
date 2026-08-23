@@ -27,3 +27,22 @@ jobs:
 
       - name: Test
         run: dotnet test GeneratedMapper.sln -c Release --no-build
+
+      - name: Pack
+        run: dotnet pack GeneratedMapper.sln -c Release --no-build -o ./nupkg-out
+
+      # A successful `pack` alone doesn't prove the package actually works for a consumer - two
+      # real bugs (an auto-applied consumer-side PrivateAssets/IncludeAssets restriction that hid
+      # the Abstractions types entirely, and a System.Collections.Immutable version pinned far
+      # above what Roslyn 4.8.0 itself depends on, breaking generator load in an older host) were
+      # only caught by actually installing the packed .nupkg into a separate consumer project and
+      # building/running it - see docs/roadmap.md F5. smoke-test/ConsumerSmokeTest is a real,
+      # tracked, minimal console project kept outside GeneratedMapper.sln for exactly this: its
+      # nuget.config points at ../../nupkg-out (this step's output), so restoring it here
+      # reproduces the same check on every push/PR.
+      - name: Smoke-test packages from a separate consumer project
+        working-directory: smoke-test/ConsumerSmokeTest
+        run: |
+          rm -rf bin obj
+          dotnet nuget locals all --clear
+          dotnet run -c Release
