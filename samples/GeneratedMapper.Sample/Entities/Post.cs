@@ -13,6 +13,7 @@ public sealed class Post
     public string Headline { get; set; } = "";
     public string Body { get; set; } = "";
     public bool IsDraft { get; set; }
+    public PostAuthor Author { get; set; } = new();
 
     public static bool ShouldMapBody(Post source) => !source.IsDraft;
 }

@@ -808,6 +808,139 @@ public sealed class UserDto
         Assert.Equal("Say \"hi\"", userDtoType.GetProperty("Name")!.GetValue(dto));
     }
 
+    [Fact]
+    public void Flattening_RuntimeProducesCorrectValueThroughNestedChain()
+    {
+        // F9: source-text assertions elsewhere prove the right chain is *emitted*; this compiles
+        // and actually invokes it, proving `source.HomeAddress.City` reads the real runtime
+        // value through a real nested object, not just a string that happens to look right.
+        const string source = @"
+using GeneratedMapper;
+
+namespace Sample;
+
+[MapTo(typeof(UserDto))]
+public sealed class User
+{
+    public Address HomeAddress { get; set; } = new();
+}
+
+public sealed class Address
+{
+    public string City { get; set; } = """";
+}
+
+public sealed class UserDto
+{
+    public string HomeAddressCity { get; set; } = """";
+}
+";
+
+        var result = GeneratorTestHelper.Run(source);
+        Assert.NotNull(result.Assembly);
+
+        var userType = result.Assembly!.GetType("Sample.User")!;
+        var addressType = result.Assembly!.GetType("Sample.Address")!;
+        var user = Activator.CreateInstance(userType)!;
+        var address = Activator.CreateInstance(addressType)!;
+        addressType.GetProperty("City")!.SetValue(address, "Paris");
+        userType.GetProperty("HomeAddress")!.SetValue(user, address);
+
+        var toDto = GetMappingsType(result.Assembly!).GetMethod("ToUserDto", new[] { userType })!;
+        var dto = toDto.Invoke(null, new[] { user });
+
+        var userDtoType = result.Assembly!.GetType("Sample.UserDto")!;
+        Assert.Equal("Paris", userDtoType.GetProperty("HomeAddressCity")!.GetValue(dto));
+    }
+
+    [Fact]
+    public void Flattening_ProjectionExpressionReadsRealValueWhenCompiledAndInvoked()
+    {
+        const string source = @"
+using GeneratedMapper;
+
+namespace Sample;
+
+[MapTo(typeof(UserDto))]
+public sealed class User
+{
+    public Address HomeAddress { get; set; } = new();
+}
+
+public sealed class Address
+{
+    public string City { get; set; } = """";
+}
+
+public sealed class UserDto
+{
+    public string HomeAddressCity { get; set; } = """";
+}
+";
+
+        var result = GeneratorTestHelper.Run(source);
+        Assert.NotNull(result.Assembly);
+
+        var projectionField = GetMappingsType(result.Assembly!).GetField("ToUserDtoProjection")!;
+        var projectionExpression = (System.Linq.Expressions.LambdaExpression)projectionField.GetValue(null)!;
+        var compiled = projectionExpression.Compile();
+
+        var userType = result.Assembly!.GetType("Sample.User")!;
+        var addressType = result.Assembly!.GetType("Sample.Address")!;
+        var user = Activator.CreateInstance(userType)!;
+        var address = Activator.CreateInstance(addressType)!;
+        addressType.GetProperty("City")!.SetValue(address, "Berlin");
+        userType.GetProperty("HomeAddress")!.SetValue(user, address);
+
+        var dto = compiled.DynamicInvoke(user);
+
+        var userDtoType = result.Assembly!.GetType("Sample.UserDto")!;
+        Assert.Equal("Berlin", userDtoType.GetProperty("HomeAddressCity")!.GetValue(dto));
+    }
+
+    [Fact]
+    public void Flattening_RuntimeCombinedWithMapDefault_SubstitutesWhenLeafIsNull()
+    {
+        const string source = @"
+using GeneratedMapper;
+
+namespace Sample;
+
+[MapTo(typeof(UserDto))]
+[MapDefault(typeof(UserDto), nameof(UserDto.HomeAddressCity), ""Unknown"")]
+public sealed class User
+{
+    public Address HomeAddress { get; set; } = new();
+}
+
+public sealed class Address
+{
+    public string? City { get; set; }
+}
+
+public sealed class UserDto
+{
+    public string HomeAddressCity { get; set; } = """";
+}
+";
+
+        var result = GeneratorTestHelper.Run(source);
+        Assert.NotNull(result.Assembly);
+
+        var userType = result.Assembly!.GetType("Sample.User")!;
+        var addressType = result.Assembly!.GetType("Sample.Address")!;
+        var user = Activator.CreateInstance(userType)!;
+        var address = Activator.CreateInstance(addressType)!;
+        addressType.GetProperty("City")!.SetValue(address, null);
+        userType.GetProperty("HomeAddress")!.SetValue(user, address);
+
+        var toDto = GetMappingsType(result.Assembly!).GetMethod("ToUserDto", new[] { userType })!;
+        var dto = toDto.Invoke(null, new[] { user });
+
+        var userDtoType = result.Assembly!.GetType("Sample.UserDto")!;
+        Assert.Equal("Unknown", userDtoType.GetProperty("HomeAddressCity")!.GetValue(dto));
+    }
+
     private static Type GetMappingsType(Assembly assembly)
         => assembly.GetType("GeneratedMapper.GeneratedMappings")!;
 

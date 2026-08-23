@@ -2,7 +2,7 @@ using Microsoft.CodeAnalysis;
 
 namespace GeneratedMapper.Generator;
 
-// GM001-GM009. IDs are assigned in implementation order, not renumbered (GM008 came after
+// GM001-GM010. IDs are assigned in implementation order, not renumbered (GM008 came after
 // GM009). IDs are never reused, only retired - see AnalyzerReleases.Shipped.md.
 internal static class Diagnostics
 {
@@ -76,5 +76,13 @@ internal static class Diagnostics
         messageFormat: "The two-argument '{2}(source, destination)' overload (and the IMapper .Map(source, destination) overload) were omitted for '{0}' -> '{1}' because the destination has init-only properties, which can't be assigned after construction. Use '{2}(source)' or Map<TDestination>(source) instead.",
         category: "GeneratedMapper",
         defaultSeverity: DiagnosticSeverity.Info,
+        isEnabledByDefault: true);
+
+    public static readonly DiagnosticDescriptor AmbiguousFlattenedMapping = new(
+        id: "GM010",
+        title: "Ambiguous naming-convention flattening match",
+        messageFormat: "Destination property '{0}' on '{1}' has no matching source property, and its name matches more than one possible chain of nested source properties (naming-convention flattening), so it was left unmapped rather than guessing. Add a [MapProperty] to state which one, or [MapIgnore] to silence this.",
+        category: "GeneratedMapper",
+        defaultSeverity: DiagnosticSeverity.Warning,
         isEnabledByDefault: true);
 }
