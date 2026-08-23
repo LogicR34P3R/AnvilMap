@@ -9,6 +9,10 @@ Generated/
 # Benchmark run output (reproducible via docs/benchmarks.md's "how to reproduce")
 BenchmarkDotNet.Artifacts/
 
+# dotnet pack output (reproducible via `dotnet pack GeneratedMapper.sln -c Release -o ./nupkg-out`)
+*.nupkg
+nupkg-out/
+
 # IDE / tooling
 .idea/
 .vs/

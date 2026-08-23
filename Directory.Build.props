@@ -1,0 +1,18 @@
+<Project>
+  <PropertyGroup>
+    <Authors>LogicR34P3R</Authors>
+    <Company>LogicR34P3R</Company>
+    <Version>0.1.0</Version>
+    <PackageProjectUrl>https://github.com/LogicR34P3R/GeneratedMapper</PackageProjectUrl>
+    <RepositoryUrl>https://github.com/LogicR34P3R/GeneratedMapper</RepositoryUrl>
+    <RepositoryType>git</RepositoryType>
+    <PublishRepositoryUrl>true</PublishRepositoryUrl>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
+
+    <!-- Only GeneratedMapper.Abstractions and GeneratedMapper.Generator are meant to be
+         published; every other project (samples, tests, benchmarks, code fixes) opts out here
+         so `dotnet pack GeneratedMapper.sln` can't accidentally produce a stray .nupkg for one
+         of them. -->
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+</Project>

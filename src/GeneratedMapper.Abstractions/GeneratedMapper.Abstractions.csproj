@@ -5,5 +5,15 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <LangVersion>latest</LangVersion>
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
+
+    <IsPackable>true</IsPackable>
+    <PackageId>GeneratedMapper.Abstractions</PackageId>
+    <Description>Attributes ([MapTo], [MapProperty], [MapIgnore], [MapCondition], [MapUsing], [MapDefault]) and the IMapper interface consumed by GeneratedMapper-generated code. Reference this package directly only if you need the attribute/IMapper types without the source generator itself (e.g. a shared contracts assembly); most consumers should reference GeneratedMapper.Generator instead, which pulls this in automatically.</Description>
+    <PackageTags>mapping;object-mapping;source-generator;dto;mapper</PackageTags>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
   </PropertyGroup>
+
+  <ItemGroup>
+    <None Include="..\..\README.md" Pack="true" PackagePath="\" />
+  </ItemGroup>
 </Project>
