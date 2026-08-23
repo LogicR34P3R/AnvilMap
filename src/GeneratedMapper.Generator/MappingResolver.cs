@@ -8,9 +8,9 @@ namespace GeneratedMapper.Generator;
 // Matches a MappingDeclaration's properties against the destination type, producing a
 // MappingModel with one PropertyMappingModel per matched property; unmatched properties
 // become diagnostics instead. MappingEmitter never re-validates this. Split by concern across
-// MappingResolver.Kind.cs (type-compatibility), .Condition.cs ([MapCondition]), and
-// .Converter.cs ([MapUsing]) - this file holds the orchestrating Resolve loop and
-// constructor-matching only.
+// MappingResolver.Kind.cs (type-compatibility), .Condition.cs ([MapCondition]),
+// .Converter.cs ([MapUsing]), and .Flattening.cs (naming-convention flattening) - this file
+// holds the orchestrating Resolve loop and constructor-matching only.
 internal static partial class MappingResolver
 {
     public static MappingModel Resolve(
@@ -98,13 +98,43 @@ internal static partial class MappingResolver
                 continue;
             }
 
-            var sourceName = explicitMappings.TryGetValue(
+            var hasExplicitOverride = explicitMappings.TryGetValue(
                 destinationProperty.Name,
-                out var explicitSource)
-                ? explicitSource
-                : destinationProperty.Name;
+                out var explicitSource);
+            var sourceName = hasExplicitOverride ? explicitSource : destinationProperty.Name;
 
-            if (!sourceProperties.TryGetValue(sourceName, out var sourceProperty))
+            IPropertySymbol? sourceProperty = null;
+            string? flattenedSourcePath = null;
+
+            if (sourceProperties.TryGetValue(sourceName, out var directMatch))
+            {
+                sourceProperty = directMatch;
+            }
+            else if (!hasExplicitOverride)
+            {
+                // Naming-convention flattening fallback - only for the default name-matching
+                // path, never for an explicit [MapProperty] override (that name must still be an
+                // exact top-level property name).
+                var path = TryResolveFlattenedPath(source, destinationProperty.Name, out var ambiguous);
+
+                if (ambiguous)
+                {
+                    report?.Invoke(Diagnostic.Create(
+                        Diagnostics.AmbiguousFlattenedMapping,
+                        destinationProperty.Locations.FirstOrDefault() ?? Location.None,
+                        destinationProperty.Name,
+                        destination.ToDisplayString()));
+                    continue;
+                }
+
+                if (path is not null)
+                {
+                    sourceProperty = path[path.Count - 1];
+                    flattenedSourcePath = string.Join(".", path.Select(p => p.Name));
+                }
+            }
+
+            if (sourceProperty is null)
             {
                 report?.Invoke(Diagnostic.Create(
                     Diagnostics.UnmappedDestinationProperty,
@@ -126,7 +156,7 @@ internal static partial class MappingResolver
                     Diagnostics.IncompatiblePropertyTypes,
                     destinationProperty.Locations.FirstOrDefault() ?? Location.None,
                     source.ToDisplayString(),
-                    sourceProperty.Name,
+                    flattenedSourcePath ?? sourceProperty.Name,
                     sourceProperty.Type.ToDisplayString(),
                     destination.ToDisplayString(),
                     destinationProperty.Name,
@@ -152,7 +182,7 @@ internal static partial class MappingResolver
                     : null;
 
             properties.Add(new PropertyMappingModel(
-                sourceProperty.Name,
+                flattenedSourcePath ?? sourceProperty.Name,
                 destinationProperty.Name,
                 resolution.Kind.Value,
                 TypeModel.From(sourceProperty.Type),
