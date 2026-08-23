@@ -5,3 +5,4 @@
 
 Rule ID | Category | Severity | Notes
 --------|----------|----------|-------
+GM010 | GeneratedMapper | Warning | Ambiguous naming-convention flattening match

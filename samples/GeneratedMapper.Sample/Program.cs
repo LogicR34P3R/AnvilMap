@@ -21,8 +21,8 @@ using (var setup = new SampleDbContext(options))
         OwnerEmail = "owner@example.com",
         Posts =
         {
-            new Post { Headline = "Compile-time mapping", Body = "No reflection at runtime.", IsDraft = false },
-            new Post { Headline = "Upcoming projection work", Body = "Draft notes.", IsDraft = true },
+            new Post { Headline = "Compile-time mapping", Body = "No reflection at runtime.", IsDraft = false, Author = new() { DisplayName = "Ada" } },
+            new Post { Headline = "Upcoming projection work", Body = "Draft notes.", IsDraft = true, Author = new() { DisplayName = "Grace" } },
         },
     });
 
@@ -80,6 +80,13 @@ foreach (var post in entity.Posts)
 // there (GM005 at build time) and Body comes through for every row, draft or not.
 foreach (var post in projectedBlogs.SelectMany(b => b.Posts))
     Console.WriteLine($"[projection] '{post.Headline}' -> Body='{post.Body}'");
+
+Console.WriteLine();
+
+// PostDto.AuthorDisplayName has no matching top-level source property on Post - resolved by
+// naming-convention flattening against Post.Author.DisplayName (an EF Core owned type).
+foreach (var post in projectedBlogs.SelectMany(b => b.Posts))
+    Console.WriteLine($"[projection] '{post.Headline}' -> AuthorDisplayName='{post.AuthorDisplayName}'");
 
 Console.WriteLine();
 

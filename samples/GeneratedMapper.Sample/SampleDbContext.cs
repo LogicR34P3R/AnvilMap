@@ -18,5 +18,7 @@ public sealed class SampleDbContext : DbContext
             .HasMany(b => b.Posts)
             .WithOne()
             .HasForeignKey(p => p.BlogId);
+
+        modelBuilder.Entity<Post>().OwnsOne(p => p.Author);
     }
 }
