@@ -67,13 +67,13 @@ internal static partial class MappingResolver
 
             if (explicitConverters.TryGetValue(destinationProperty.Name, out var converterMethodName))
             {
-                var converter = ResolveConverter(compilation, source, destinationProperty, converterMethodName, report);
+                var converter = ResolveConverter(compilation, declaration.MethodHostSymbol, source, destinationProperty, converterMethodName, report);
 
                 if (converter is null)
                     continue;
 
                 // [MapCondition] can still gate a [MapUsing]-converted property; independent.
-                var converterCondition = ResolveCondition(source, destination, destinationProperty, explicitConditions, report);
+                var converterCondition = ResolveCondition(declaration.MethodHostSymbol, source, destination, destinationProperty, explicitConditions, report);
 
                 if (!converterCondition.Success)
                     continue;
@@ -93,7 +93,8 @@ internal static partial class MappingResolver
                     ConditionAcceptsDestination: converterCondition.AcceptsDestination,
                     DestinationIsInitOnly: destinationProperty.SetMethod!.IsInitOnly,
                     ConverterMethodName: converter,
-                    DefaultValueLiteral: converterDefault));
+                    DefaultValueLiteral: converterDefault,
+                    MethodHostType: TypeModel.From(declaration.MethodHostSymbol)));
 
                 continue;
             }
@@ -164,7 +165,7 @@ internal static partial class MappingResolver
                 continue;
             }
 
-            var condition = ResolveCondition(source, destination, destinationProperty, explicitConditions, report);
+            var condition = ResolveCondition(declaration.MethodHostSymbol, source, destination, destinationProperty, explicitConditions, report);
 
             if (!condition.Success)
                 continue;
@@ -195,7 +196,8 @@ internal static partial class MappingResolver
                 conditionAcceptsDestination,
                 destinationProperty.SetMethod!.IsInitOnly,
                 resolution.DestinationShape,
-                DefaultValueLiteral: propertyDefault));
+                DefaultValueLiteral: propertyDefault,
+                MethodHostType: conditionMethodName is null ? null : TypeModel.From(declaration.MethodHostSymbol)));
         }
 
         var hasParameterlessConstructor = destination.InstanceConstructors

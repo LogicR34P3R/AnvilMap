@@ -19,7 +19,7 @@ public sealed class User
 }
 ```
 
-The mapping configuration lives on the mapping declaration (the source type), not on either DTO/entity property. This keeps reverse mappings and projection mappings unambiguous about direction. Use `[MapIgnore]` on a destination property to opt it out of auto-wiring.
+The mapping configuration lives on the mapping declaration — either the source type (`[MapTo]`) or the destination type (`[MapFrom]`, see below) — not on either DTO/entity property. This keeps reverse mappings and projection mappings unambiguous about direction. Use `[MapIgnore]` on a destination property to opt it out of auto-wiring.
 
 For each declared mapping the generator emits, into a `GeneratedMapper.GeneratedMappings` static class:
 
@@ -29,6 +29,43 @@ For each declared mapping the generator emits, into a `GeneratedMapper.Generated
 - A generic `Map<TDestination>`/`Map<TSource,TDestination>` dispatcher (backed by static `FrozenDictionary` lookup tables, not a chain of type checks), plus a `GeneratedMapperService : IMapper` for DI registration (`services.AddSingleton<IMapper, GeneratedMapperService>()`).
 
 Nested and enumerable (`List<T>`/array/`IEnumerable<T>`) properties are mapped automatically when a mapping exists between the element types.
+
+### Declaring from the destination side
+
+```csharp
+// User (the entity) has no idea UserDto exists - no reference to it, no attribute on it.
+public sealed class User
+{
+    public int Id { get; set; }
+    public string Email { get; set; } = "";
+}
+
+[MapFrom(typeof(User), GenerateReverse = true)]
+[MapProperty(typeof(User), nameof(User.Email), nameof(EmailAddress))]
+public sealed class UserDto
+{
+    public int Id { get; set; }
+    public string EmailAddress { get; set; } = "";
+}
+```
+
+`[MapFrom]` is `[MapTo]` placed on the other side of the mapping — functionally identical (same generated methods, same `GenerateReverse`/`MaxDepth`), just declared on the destination type instead of the source. Use it when the source shouldn't reference the destination — typically a domain entity in a core/domain layer that shouldn't know about the DTOs/view models an outer layer builds from it, which is usually already allowed to reference the entity.
+
+`[MapProperty]`, `[MapCondition]`, `[MapUsing]`, and `[MapDefault]` can all be placed alongside `[MapFrom]` on the same destination type instead of on the source. The `Type` argument that normally names the destination now names the source instead (matching `[MapFrom]`'s own argument) — everything else about them, including the property-name arguments, keeps its usual meaning. The one real difference: a `[MapCondition]`/`[MapUsing]` method is looked up on whichever type physically carries the attribute, so for a `[MapFrom]`-declared mapping it's expected on the destination (the DTO), not the source — which is the point, since the source still isn't allowed to know about the destination:
+
+```csharp
+[MapFrom(typeof(User))]
+[MapUsing(typeof(User), nameof(FullName), nameof(ComputeFullName))]
+public sealed class UserDto
+{
+    public string FullName { get; set; } = "";
+
+    // Lives here, not on User - it's fine for the DTO to reference User.FirstName/LastName.
+    public static string ComputeFullName(User source) => $"{source.FirstName} {source.LastName}";
+}
+```
+
+A given mapping only needs one of `[MapTo]`/`[MapFrom]` — pick whichever side is allowed to reference the other in your architecture. Nothing else in this document depends on which one was used; every example below works identically declared either way. Declaring the same source/destination pair twice — via both `[MapTo]` and `[MapFrom]`, two `[MapTo]`s to the same destination, or a `GenerateReverse`-implied pair colliding with an explicit declaration — is reported as `GM011`; only the last declaration encountered is actually used.
 
 ### Conditional mapping
 
@@ -99,7 +136,7 @@ When a destination property has no exact-name match and no explicit `[MapPropert
 
 ### Diagnostics
 
-`GM001` (destination property left unmapped), `GM002` (projection skipped — the mapping graph is cyclic; the imperative method is still generated), `GM003` (error — incompatible property types with no implicit conversion), `GM004` (error — `[MapCondition]` references a method that doesn't exist or has the wrong signature), `GM005` (a conditionally-mapped property was left out of a SQL projection), `GM006` (a mapping was skipped entirely because the destination has an init-only property, no accessible parameterless constructor, and no constructor whose parameters could all be matched to already-mapped, unconditioned properties), `GM007` (`[MapCondition]` on an init-only destination property isn't supported — the property was left out), `GM008` (the two-arg `To{Dest}(source, destination)` overload was omitted because the destination has init-only properties), `GM009` (error — `[MapUsing]` references a method that doesn't exist or has the wrong signature/return type), `GM010` (a destination property's name matched more than one valid naming-convention-flattening path and was left unmapped).
+`GM001` (destination property left unmapped), `GM002` (projection skipped — the mapping graph is cyclic; the imperative method is still generated), `GM003` (error — incompatible property types with no implicit conversion), `GM004` (error — `[MapCondition]` references a method that doesn't exist or has the wrong signature), `GM005` (a conditionally-mapped property was left out of a SQL projection), `GM006` (a mapping was skipped entirely because the destination has an init-only property, no accessible parameterless constructor, and no constructor whose parameters could all be matched to already-mapped, unconditioned properties), `GM007` (`[MapCondition]` on an init-only destination property isn't supported — the property was left out), `GM008` (the two-arg `To{Dest}(source, destination)` overload was omitted because the destination has init-only properties), `GM009` (error — `[MapUsing]` references a method that doesn't exist or has the wrong signature/return type), `GM010` (a destination property's name matched more than one valid naming-convention-flattening path and was left unmapped), `GM011` (the same source/destination pair was declared more than once — via `[MapTo]`, `[MapFrom]`, or a `GenerateReverse`-implied pair colliding with an explicit one; only the last one encountered is used).
 
 Diagnostic IDs are never reused, only retired, tracked via `src/GeneratedMapper.Generator/AnalyzerReleases.Shipped.md`/`.Unshipped.md` (mechanically enforced at build time — see `CONTRIBUTING.md`).
 
@@ -124,7 +161,7 @@ Positional records (e.g. `record UserDto(int Id, string Name);`) are supported t
 
 ## Project layout
 
-- `src/GeneratedMapper.Abstractions` — attributes (`MapTo`, `MapProperty`, `MapIgnore`, `MapCondition`, `MapUsing`, `MapDefault`) and the `IMapper` interface.
+- `src/GeneratedMapper.Abstractions` — attributes (`MapTo`, `MapFrom`, `MapProperty`, `MapIgnore`, `MapCondition`, `MapUsing`, `MapDefault`) and the `IMapper` interface.
 - `src/GeneratedMapper.Generator` — the incremental source generator.
 - `src/GeneratedMapper.CodeFixes` — IDE code fixes for the diagnostics that have an unambiguous mechanical fix (`GM001` — add `[MapIgnore]`; `GM004`/`GM009` — generate a stub method).
 - `samples/GeneratedMapper.Sample` — a runnable console app mapping EF Core entities (SQLite in-memory) to view models, printing the SQL generated by `ProjectToBlogDto()`.

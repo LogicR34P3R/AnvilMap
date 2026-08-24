@@ -85,4 +85,12 @@ internal static class Diagnostics
         category: "GeneratedMapper",
         defaultSeverity: DiagnosticSeverity.Warning,
         isEnabledByDefault: true);
+
+    public static readonly DiagnosticDescriptor DuplicateMappingDeclaration = new(
+        id: "GM011",
+        title: "Duplicate mapping declaration",
+        messageFormat: "The mapping from '{0}' to '{1}' is declared more than once (via [MapTo] and/or [MapFrom], including one implied by [GenerateReverse]). Only the last one encountered is used - remove all but one, or make sure they agree.",
+        category: "GeneratedMapper",
+        defaultSeverity: DiagnosticSeverity.Warning,
+        isEnabledByDefault: true);
 }

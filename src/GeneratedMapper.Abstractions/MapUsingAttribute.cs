@@ -10,6 +10,12 @@ namespace GeneratedMapper;
 /// Not auto-reversed by <see cref="MapToAttribute.GenerateReverse"/>: declare a separate
 /// <see cref="MapUsingAttribute"/> on the destination type if the reverse direction needs one.
 /// </summary>
+/// <remarks>
+/// Can also be placed on a destination type decorated with <see cref="MapFromAttribute"/>
+/// instead of on the source - in that case, pass the source type as <c>destinationType</c>,
+/// and the converter method is looked up on the destination type (the one this attribute is
+/// declared on) instead of the source.
+/// </remarks>
 [AttributeUsage(AttributeTargets.Class | AttributeTargets.Struct, AllowMultiple = true, Inherited = false)]
 public sealed class MapUsingAttribute : Attribute
 {

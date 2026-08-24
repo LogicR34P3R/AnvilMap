@@ -20,4 +20,9 @@ internal sealed record PropertyMappingModel(
     bool DestinationIsInitOnly = false,
     CollectionShape DestinationCollectionShape = CollectionShape.List,
     string? ConverterMethodName = null,
-    string? DefaultValueLiteral = null);
+    string? DefaultValueLiteral = null,
+    // The type ConditionMethodName/ConverterMethodName is actually declared on - the source
+    // type for a [MapTo]-declared mapping, but possibly the destination type for a
+    // [MapFrom]-declared one. Set whenever either method name is set; MappingEmitter qualifies
+    // the generated call with this instead of assuming the mapping's source type.
+    TypeModel? MethodHostType = null);

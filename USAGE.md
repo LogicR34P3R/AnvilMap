@@ -14,7 +14,7 @@ GeneratedMapper isn't published to nuget.org yet. Until it is, you have two ways
 ```
 dotnet pack GeneratedMapper.sln -c Release -o ./nupkg-out
 ```
-
+~~~~
 then add a `nuget.config` pointing at that folder in your own project and
 
 ```
@@ -72,6 +72,32 @@ UserDto dto = user.ToUserDto();
 Properties are matched by exact name by default. Anything you need to customize (renames,
 conditions, computed values, nested objects) is declared with more attributes right there on
 `User` — see "Customizing a mapping" below.
+
+If your entities live in a core/domain layer that shouldn't reference the DTOs/view models built
+from them, put the declaration on the DTO instead, with `[MapFrom]` in place of `[MapTo]` — it's
+the same mapping, just declared from the other side:
+
+```csharp
+using GeneratedMapper;
+
+// User has no reference to UserDto anywhere.
+public sealed class User
+{
+    public int Id { get; set; }
+    public string Name { get; set; } = "";
+}
+
+[MapFrom(typeof(User))]
+public sealed class UserDto
+{
+    public int Id { get; set; }
+    public string Name { get; set; } = "";
+}
+```
+
+Generates the exact same `user.ToUserDto()`. See "Declaring from the destination side" in
+[README.md](README.md#declaring-from-the-destination-side) for how the customization attributes
+below behave when placed on the DTO this way instead.
 
 ## What gets generated
 
@@ -262,6 +288,67 @@ reverse direction automatically, since they're tied to the original source type 
 flattening, can't be un-flattened back into constructing a nested object) — declare a separate
 attribute on the destination type if the reverse direction needs its own.
 
+`GenerateReverse` works the same way on `[MapFrom]`:
+
+```csharp
+[MapFrom(typeof(User), GenerateReverse = true)]
+public sealed class UserDto { /* ... */ }
+```
+
+also generates both `user.ToUserDto()` and `dto.ToUser()`, still without touching `User`.
+
+Neither `[MapTo]` nor `[MapFrom]` actually cares which of your two types is "the entity" — each
+one just means "the decorated type is the source, the type argument is the destination" (for
+`[MapTo]`) or "the type argument is the source, the decorated type is the destination" (for
+`[MapFrom]`). So `[MapTo(typeof(User))]` placed directly on `UserDto` is equally valid, and
+generates `dto.ToUser()` — a DTO-to-entity direction, useful for a create/update command that
+populates an entity from an incoming DTO:
+
+```csharp
+[MapTo(typeof(User))]
+public sealed class UserDto { /* ... */ }
+```
+
+If you want both directions declared entirely on the DTO, without `GenerateReverse` tying them
+to one shared set of customization attributes, combine `[MapFrom]` and `[MapTo]` on the same
+type instead — each direction gets its own `[MapProperty]`/`[MapCondition]`/etc. if they need to
+differ:
+
+```csharp
+[MapFrom(typeof(User))]  // user.ToUserDto()
+[MapTo(typeof(User))]    // dto.ToUser()
+public sealed class UserDto { /* ... */ }
+```
+
+With this combined form, `[MapProperty]` (and the other customization attributes) needs a little care: both
+`[MapFrom(typeof(User))]` and `[MapTo(typeof(User))]` share the same `typeof(User)` argument, which is all
+`[MapProperty]` uses to figure out which declaration it belongs to — so **each direction needs its own
+`[MapProperty]`, written with the property names in that direction's order**:
+
+```csharp
+[MapFrom(typeof(User))]
+[MapProperty(typeof(User), nameof(User.Email), nameof(EmailAddress))]   // User -> UserDto
+[MapTo(typeof(User))]
+[MapProperty(typeof(User), nameof(EmailAddress), nameof(User.Email))]   // UserDto -> User
+public sealed class UserDto
+{
+    public string EmailAddress { get; set; } = "";
+}
+```
+
+The two don't collide — internally each is keyed by its `destinationProperty` argument (`"EmailAddress"` vs
+`"Email"`), and every direction's resolver only ever looks up the one matching the property it's actually
+trying to fill in on *its own* destination type; the other entry just goes unused for that direction. But if
+you forget the second, oppositely-oriented `[MapProperty]`, the direction that's missing it doesn't error —
+it silently falls back to exact-name matching, finds nothing, and reports `GM001` instead of applying the
+rename you probably wanted on both sides.
+
+If the rename is symmetric — which it usually is, `Email` ↔ `EmailAddress` either way — this is more setup
+than you need: a single declaration with `GenerateReverse = true` (as in the previous example) auto-reverses
+`[MapProperty]`'s source/destination for the synthesized reverse direction, so one attribute covers both
+directions. Reach for the combined `[MapFrom]`+`[MapTo]` form only when the two directions genuinely need
+independent configuration.
+
 ## Init-only and record destinations
 
 A destination with `init`-only properties (including non-positional `record` types) is built via
@@ -324,6 +411,7 @@ The generator reports build-time diagnostics instead of failing silently or thro
 | GM008 | Info | The two-argument `To{Dest}(source, destination)` overload was omitted because the destination has `init`-only properties. |
 | GM009 | Error | `[MapUsing]` references a method that doesn't exist or has the wrong signature/return type. |
 | GM010 | Warning | A destination property's name matched more than one valid naming-convention-flattening path — left unmapped rather than guessed. Add `[MapProperty]` to disambiguate. |
+| GM011 | Warning | The same source/destination pair was declared more than once (`[MapTo]` and/or `[MapFrom]`, including a `GenerateReverse`-implied pair colliding with an explicit declaration). Only the last one encountered is used. |
 
 GM001, GM004, and GM009 have one-click IDE code fixes available if you also reference
 `GeneratedMapper.CodeFixes`.

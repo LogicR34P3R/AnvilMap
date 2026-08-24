@@ -13,10 +13,13 @@ using Microsoft.CodeAnalysis.Formatting;
 namespace GeneratedMapper.CodeFixes;
 
 // GM004 ([MapCondition] method not found) and GM009 ([MapUsing] method not found) - both name
-// a static method on the source type that doesn't exist yet. Offers to generate a matching
-// stub (throwing NotImplementedException) directly on that source type, which is usually a
-// different file than the one the diagnostic is reported against (the destination property).
-// The source type is located via the "SourceMetadataName"/"MethodName"/"ReturnType" diagnostic
+// a static method that doesn't exist yet. The stub is inserted onto the method-host type (the
+// type carrying [MapTo]/[MapFrom] and its companion attributes - the source type for a
+// [MapTo]-declared mapping, but possibly the destination type for a [MapFrom]-declared one),
+// which is usually a different file than the one the diagnostic is reported against (the
+// destination property) - but the stub's required first parameter is always the source type,
+// even when the stub itself lands on the destination. Both types are located via the
+// "MethodHostMetadataName"/"SourceMetadataName"/"MethodName"/"ReturnType" diagnostic
 // properties set in MappingResolver, not by parsing the message text.
 [ExportCodeFixProvider(LanguageNames.CSharp, Name = nameof(GenerateStubMethodCodeFixProvider)), Shared]
 public sealed class GenerateStubMethodCodeFixProvider : CodeFixProvider
@@ -32,6 +35,9 @@ public sealed class GenerateStubMethodCodeFixProvider : CodeFixProvider
     public override Task RegisterCodeFixesAsync(CodeFixContext context)
     {
         var diagnostic = context.Diagnostics[0];
+
+        if (!diagnostic.Properties.TryGetValue("MethodHostMetadataName", out var methodHostMetadataName) || methodHostMetadataName is null)
+            return Task.CompletedTask;
 
         if (!diagnostic.Properties.TryGetValue("SourceMetadataName", out var sourceMetadataName) || sourceMetadataName is null)
             return Task.CompletedTask;
@@ -49,7 +55,7 @@ public sealed class GenerateStubMethodCodeFixProvider : CodeFixProvider
         context.RegisterCodeFix(
             CodeAction.Create(
                 title: $"Generate stub method '{methodName}'",
-                createChangedSolution: ct => AddStubMethodAsync(context.Document, sourceMetadataName, methodName, returnType, ct),
+                createChangedSolution: ct => AddStubMethodAsync(context.Document, methodHostMetadataName, sourceMetadataName, methodName, returnType, ct),
                 equivalenceKey: diagnostic.Id + "_GenerateStubMethod"),
             diagnostic);
 
@@ -57,24 +63,25 @@ public sealed class GenerateStubMethodCodeFixProvider : CodeFixProvider
     }
 
     private static async Task<Solution> AddStubMethodAsync(
-        Document document, string sourceMetadataName, string methodName, string returnType, CancellationToken ct)
+        Document document, string methodHostMetadataName, string sourceMetadataName, string methodName, string returnType, CancellationToken ct)
     {
         var solution = document.Project.Solution;
         var compilation = await document.Project.GetCompilationAsync(ct).ConfigureAwait(false);
+        var methodHostType = compilation?.GetTypeByMetadataName(methodHostMetadataName);
         var sourceType = compilation?.GetTypeByMetadataName(sourceMetadataName);
-        var syntaxRef = sourceType?.DeclaringSyntaxReferences.FirstOrDefault();
+        var syntaxRef = methodHostType?.DeclaringSyntaxReferences.FirstOrDefault();
 
-        if (syntaxRef is null)
+        if (syntaxRef is null || sourceType is null)
             return solution;
 
-        var sourceDocument = solution.GetDocument(syntaxRef.SyntaxTree);
-        if (sourceDocument is null)
+        var hostDocument = solution.GetDocument(syntaxRef.SyntaxTree);
+        if (hostDocument is null)
             return solution;
 
-        var root = await sourceDocument.GetSyntaxRootAsync(ct).ConfigureAwait(false);
+        var root = await hostDocument.GetSyntaxRootAsync(ct).ConfigureAwait(false);
         var typeDecl = (TypeDeclarationSyntax)await syntaxRef.GetSyntaxAsync(ct).ConfigureAwait(false);
 
-        var parameterType = SyntaxFactory.ParseTypeName(sourceType!.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat));
+        var parameterType = SyntaxFactory.ParseTypeName(sourceType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat));
         var method = SyntaxFactory.MethodDeclaration(SyntaxFactory.ParseTypeName(returnType), methodName)
             .AddModifiers(SyntaxFactory.Token(SyntaxKind.PublicKeyword), SyntaxFactory.Token(SyntaxKind.StaticKeyword))
             .AddParameterListParameters(SyntaxFactory.Parameter(SyntaxFactory.Identifier("source")).WithType(parameterType))
@@ -83,7 +90,7 @@ public sealed class GenerateStubMethodCodeFixProvider : CodeFixProvider
             .WithAdditionalAnnotations(Formatter.Annotation);
 
         var newRoot = root!.ReplaceNode(typeDecl, typeDecl.AddMembers(method));
-        var newDocument = sourceDocument.WithSyntaxRoot(newRoot);
+        var newDocument = hostDocument.WithSyntaxRoot(newRoot);
         var formattedDocument = await Formatter.FormatAsync(newDocument, Formatter.Annotation, cancellationToken: ct).ConfigureAwait(false);
 
         return formattedDocument.Project.Solution;

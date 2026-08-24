@@ -6,3 +6,4 @@
 Rule ID | Category | Severity | Notes
 --------|----------|----------|-------
 GM010 | GeneratedMapper | Warning | Ambiguous naming-convention flattening match
+GM011 | GeneratedMapper | Warning | Duplicate mapping declaration

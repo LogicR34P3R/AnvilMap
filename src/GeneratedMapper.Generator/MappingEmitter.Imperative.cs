@@ -48,7 +48,7 @@ internal static partial class MappingEmitter
             {
                 sb.AppendLine($"    public static {destination} {methodName}(this {source} source, {destination} destination)");
                 sb.AppendLine("    {");
-                EmitAssignments(sb, mapping.Properties, source, useNullableReferenceTypes);
+                EmitAssignments(sb, mapping.Properties, useNullableReferenceTypes);
                 sb.AppendLine("        return destination;");
                 sb.AppendLine("    }");
                 sb.AppendLine();
@@ -62,7 +62,7 @@ internal static partial class MappingEmitter
 
             sb.AppendLine($"    private static {destination} {methodName}(this {source} source, {destination} destination, int depth)");
             sb.AppendLine("    {");
-            EmitAssignments(sb, mapping.Properties, source, useNullableReferenceTypes, mapping);
+            EmitAssignments(sb, mapping.Properties, useNullableReferenceTypes, mapping);
             sb.AppendLine("        return destination;");
             sb.AppendLine("    }");
             sb.AppendLine();
@@ -93,7 +93,7 @@ internal static partial class MappingEmitter
                 continue;
             }
 
-            var value = BuildValueExpression(property, source, useNullableReferenceTypes);
+            var value = BuildValueExpression(property, useNullableReferenceTypes);
 
             if (value is null)
                 continue;
@@ -106,7 +106,7 @@ internal static partial class MappingEmitter
         sb.AppendLine($"    public static {destination} {methodName}(this {source} source)");
         sb.AppendLine("    {");
         sb.AppendLine($"        var destination = new {destination} {{ {string.Join(", ", initializerAssignments)} }};");
-        EmitAssignments(sb, remainingProperties, source, useNullableReferenceTypes);
+        EmitAssignments(sb, remainingProperties, useNullableReferenceTypes);
         sb.AppendLine("        return destination;");
         sb.AppendLine("    }");
         sb.AppendLine();
@@ -141,7 +141,7 @@ internal static partial class MappingEmitter
         // resolvable - MappingResolver.TryMatchConstructor only returns a match when that
         // holds for all of them.
         var constructorArgs = constructorProperties
-            .Select(name => BuildValueExpression(byName[name], source, useNullableReferenceTypes)!);
+            .Select(name => BuildValueExpression(byName[name], useNullableReferenceTypes)!);
 
         var initializerAssignments = new List<string>();
 
@@ -158,7 +158,7 @@ internal static partial class MappingEmitter
                 continue;
             }
 
-            var value = BuildValueExpression(property, source, useNullableReferenceTypes);
+            var value = BuildValueExpression(property, useNullableReferenceTypes);
 
             if (value is null)
                 continue;
@@ -178,7 +178,7 @@ internal static partial class MappingEmitter
         sb.AppendLine($"    public static {destination} {methodName}(this {source} source)");
         sb.AppendLine("    {");
         sb.AppendLine($"        var destination = {construction};");
-        EmitAssignments(sb, remainingProperties, source, useNullableReferenceTypes);
+        EmitAssignments(sb, remainingProperties, useNullableReferenceTypes);
         sb.AppendLine("        return destination;");
         sb.AppendLine("    }");
         sb.AppendLine();
@@ -189,7 +189,6 @@ internal static partial class MappingEmitter
     private static void EmitAssignments(
         StringBuilder sb,
         IEnumerable<PropertyMappingModel> properties,
-        string source,
         bool useNullableReferenceTypes,
         MappingModel? recursionContext = null)
     {
@@ -199,7 +198,7 @@ internal static partial class MappingEmitter
 
             var value = isRecursive
                 ? BuildRecursiveValueExpression(property, useNullableReferenceTypes)
-                : BuildValueExpression(property, source, useNullableReferenceTypes);
+                : BuildValueExpression(property, useNullableReferenceTypes);
 
             if (value is null)
                 continue;
@@ -211,9 +210,10 @@ internal static partial class MappingEmitter
 
             if (property.ConditionMethodName is not null)
             {
+                var host = property.MethodHostType!.FullyQualifiedName;
                 guards.Add(property.ConditionAcceptsDestination
-                    ? $"{source}.{property.ConditionMethodName}(source, destination)"
-                    : $"{source}.{property.ConditionMethodName}(source)");
+                    ? $"{host}.{property.ConditionMethodName}(source, destination)"
+                    : $"{host}.{property.ConditionMethodName}(source)");
             }
 
             if (guards.Count == 0)
@@ -259,7 +259,7 @@ internal static partial class MappingEmitter
             _ => null
         };
 
-    private static string? BuildValueExpression(PropertyMappingModel property, string source, bool useNullableReferenceTypes)
+    private static string? BuildValueExpression(PropertyMappingModel property, bool useNullableReferenceTypes)
     {
         var value = property.Kind switch
         {
@@ -275,7 +275,7 @@ internal static partial class MappingEmitter
                 EmitEnumerableImperativeValue(property),
 
             PropertyMappingKind.Converted =>
-                $"{source}.{property.ConverterMethodName}(source)",
+                $"{property.MethodHostType!.FullyQualifiedName}.{property.ConverterMethodName}(source)",
 
             _ => null
         };

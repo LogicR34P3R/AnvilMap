@@ -1,4 +1,5 @@
 using System.Linq;
+using System.Text.RegularExpressions;
 using Microsoft.CodeAnalysis;
 using Xunit;
 
@@ -1659,6 +1660,699 @@ public sealed class UserDto
         Assert.NotNull(result.GeneratedSource);
         Assert.Contains("destination.Name = source.Name ?? \"Unknown\";", result.GeneratedSource);
         Assert.Contains("destination.Name = source.Name;", result.GeneratedSource);
+        AssertNoCompileErrors(result);
+    }
+
+    [Fact]
+    public void MapFrom_GeneratesExtensionMethodsSameAsMapTo()
+    {
+        var result = GeneratorTestHelper.Run(@"
+using GeneratedMapper;
+
+namespace Sample;
+
+public sealed class User
+{
+    public int Id { get; set; }
+    public string Name { get; set; } = """";
+}
+
+[MapFrom(typeof(User))]
+public sealed class UserDto
+{
+    public int Id { get; set; }
+    public string Name { get; set; } = """";
+}
+");
+
+        Assert.NotNull(result.GeneratedSource);
+        Assert.Contains("public static global::Sample.UserDto ToUserDto(this global::Sample.User source)", result.GeneratedSource);
+        Assert.Contains("destination.Id = source.Id;", result.GeneratedSource);
+        Assert.Contains("destination.Name = source.Name;", result.GeneratedSource);
+        AssertNoCompileErrors(result);
+    }
+
+    [Fact]
+    public void MapFrom_MapPropertyRenamesDestinationProperty()
+    {
+        var result = GeneratorTestHelper.Run(@"
+using GeneratedMapper;
+
+namespace Sample;
+
+public sealed class User
+{
+    public string Email { get; set; } = """";
+}
+
+[MapFrom(typeof(User))]
+[MapProperty(typeof(User), nameof(User.Email), nameof(EmailAddress))]
+public sealed class UserDto
+{
+    public string EmailAddress { get; set; } = """";
+}
+");
+
+        Assert.NotNull(result.GeneratedSource);
+        Assert.Contains("destination.EmailAddress = source.Email;", result.GeneratedSource);
+        AssertNoCompileErrors(result);
+    }
+
+    [Fact]
+    public void MapFrom_GenerateReverse_GeneratesBothDirections()
+    {
+        var result = GeneratorTestHelper.Run(@"
+using GeneratedMapper;
+
+namespace Sample;
+
+public sealed class User
+{
+    public int Id { get; set; }
+}
+
+[MapFrom(typeof(User), GenerateReverse = true)]
+public sealed class UserDto
+{
+    public int Id { get; set; }
+}
+");
+
+        Assert.NotNull(result.GeneratedSource);
+        Assert.Contains("ToUserDto(this global::Sample.User source)", result.GeneratedSource);
+        Assert.Contains("ToUser(this global::Sample.UserDto source)", result.GeneratedSource);
+        AssertNoCompileErrors(result);
+    }
+
+    [Fact]
+    public void MapFrom_MapConditionMethodLivesOnDestination_NotSource()
+    {
+        // The whole point of [MapFrom]: User (the entity) has no idea UserDto exists, and no
+        // static method referencing it - ShouldMapName lives on UserDto instead.
+        var result = GeneratorTestHelper.Run(@"
+using GeneratedMapper;
+
+namespace Sample;
+
+public sealed class User
+{
+    public string Name { get; set; } = """";
+}
+
+[MapFrom(typeof(User))]
+[MapCondition(typeof(User), nameof(Name), nameof(ShouldMapName))]
+public sealed class UserDto
+{
+    public string Name { get; set; } = """";
+
+    public static bool ShouldMapName(User source) => !string.IsNullOrEmpty(source.Name);
+}
+");
+
+        Assert.NotNull(result.GeneratedSource);
+        Assert.Contains("ShouldMapName(source)", result.GeneratedSource);
+        AssertNoCompileErrors(result);
+    }
+
+    [Fact]
+    public void MapFrom_MapUsingConverterLivesOnDestination_NotSource()
+    {
+        var result = GeneratorTestHelper.Run(@"
+using GeneratedMapper;
+
+namespace Sample;
+
+public sealed class User
+{
+    public string FirstName { get; set; } = """";
+    public string LastName { get; set; } = """";
+}
+
+[MapFrom(typeof(User))]
+[MapUsing(typeof(User), nameof(FullName), nameof(ComputeFullName))]
+public sealed class UserDto
+{
+    public string FullName { get; set; } = """";
+
+    public static string ComputeFullName(User source) => $""{source.FirstName} {source.LastName}"";
+}
+");
+
+        Assert.NotNull(result.GeneratedSource);
+        Assert.Contains("destination.FullName = global::Sample.UserDto.ComputeFullName(source);", result.GeneratedSource);
+        AssertNoCompileErrors(result);
+    }
+
+    [Fact]
+    public void MapFrom_MapUsingMissingMethod_ReportsGM009AgainstDestinationType()
+    {
+        var result = GeneratorTestHelper.Run(@"
+using GeneratedMapper;
+
+namespace Sample;
+
+public sealed class User
+{
+    public string FirstName { get; set; } = """";
+}
+
+[MapFrom(typeof(User))]
+[MapUsing(typeof(User), nameof(FullName), ""DoesNotExist"")]
+public sealed class UserDto
+{
+    public string FullName { get; set; } = """";
+}
+");
+
+        Assert.NotNull(result.GeneratedSource);
+        Assert.Contains(result.GeneratorDiagnostics, d => d.Id == "GM009" && d.Severity == DiagnosticSeverity.Error);
+        Assert.DoesNotContain("destination.FullName", result.GeneratedSource);
+        AssertNoCompileErrors(result);
+    }
+
+    [Fact]
+    public void MapFrom_NestedMapping_WorksAlongsideMapTo()
+    {
+        var result = GeneratorTestHelper.Run(@"
+using GeneratedMapper;
+
+namespace Sample;
+
+[MapTo(typeof(AddressDto))]
+public sealed class Address
+{
+    public string City { get; set; } = """";
+}
+
+public sealed class AddressDto
+{
+    public string City { get; set; } = """";
+}
+
+public sealed class User
+{
+    public Address? HomeAddress { get; set; }
+}
+
+[MapFrom(typeof(User))]
+public sealed class UserDto
+{
+    public AddressDto? HomeAddress { get; set; }
+}
+");
+
+        Assert.NotNull(result.GeneratedSource);
+        Assert.Contains("destination.HomeAddress = source.HomeAddress?.ToAddressDto()!;", result.GeneratedSource);
+        AssertNoCompileErrors(result);
+    }
+
+    [Fact]
+    public void MapFrom_MapUsing_InlinedInProjection_UsesDestinationTypeQualifier()
+    {
+        // Regression coverage for the qualifier bug: MappingEmitter.Projection.cs used to
+        // hardcode the mapping's *source* type as the converter call's qualifier, which would
+        // reference a method that doesn't exist on the source for a [MapFrom]-declared mapping.
+        var result = GeneratorTestHelper.Run(@"
+using GeneratedMapper;
+
+namespace Sample;
+
+public sealed class User
+{
+    public string FirstName { get; set; } = """";
+    public string LastName { get; set; } = """";
+}
+
+[MapFrom(typeof(User))]
+[MapUsing(typeof(User), nameof(FullName), nameof(ComputeFullName))]
+public sealed class UserDto
+{
+    public string FullName { get; set; } = """";
+
+    public static string ComputeFullName(User source) => $""{source.FirstName} {source.LastName}"";
+}
+");
+
+        Assert.NotNull(result.GeneratedSource);
+        Assert.Contains("source => new global::Sample.UserDto { FullName = global::Sample.UserDto.ComputeFullName(source) };", result.GeneratedSource);
+        Assert.Contains("ProjectToUserDto(this IQueryable<global::Sample.User> source)", result.GeneratedSource);
+        AssertNoCompileErrors(result);
+    }
+
+    [Fact]
+    public void MapFrom_MapConditionResolvesTwoArgOverload_MethodOnDestination()
+    {
+        var result = GeneratorTestHelper.Run(@"
+using GeneratedMapper;
+
+namespace Sample;
+
+public sealed class Post
+{
+    public string Body { get; set; } = """";
+}
+
+[MapFrom(typeof(Post))]
+[MapCondition(typeof(Post), nameof(Body), nameof(ShouldMapBody))]
+public sealed class PostDto
+{
+    public string Body { get; set; } = """";
+
+    public static bool ShouldMapBody(Post source, PostDto? destination) => string.IsNullOrEmpty(destination?.Body);
+}
+");
+
+        Assert.NotNull(result.GeneratedSource);
+        Assert.Contains("if (global::Sample.PostDto.ShouldMapBody(source, destination))", result.GeneratedSource);
+        AssertNoCompileErrors(result);
+    }
+
+    [Fact]
+    public void MapFrom_MapConditionMissingMethod_ReportsGM004AgainstDestinationType()
+    {
+        var result = GeneratorTestHelper.Run(@"
+using GeneratedMapper;
+
+namespace Sample;
+
+public sealed class Post
+{
+    public string Body { get; set; } = """";
+}
+
+[MapFrom(typeof(Post))]
+[MapCondition(typeof(Post), nameof(Body), ""DoesNotExist"")]
+public sealed class PostDto
+{
+    public string Body { get; set; } = """";
+}
+");
+
+        Assert.NotNull(result.GeneratedSource);
+        Assert.Contains(result.GeneratorDiagnostics, d => d.Id == "GM004" && d.Severity == DiagnosticSeverity.Error);
+        Assert.DoesNotContain("destination.Body", result.GeneratedSource);
+        AssertNoCompileErrors(result);
+    }
+
+    [Fact]
+    public void MapFrom_MapDefault_SubstitutesNull_ImperativeAndProjection()
+    {
+        var result = GeneratorTestHelper.Run(@"
+using GeneratedMapper;
+
+namespace Sample;
+
+public sealed class User
+{
+    public string? Name { get; set; }
+}
+
+[MapFrom(typeof(User))]
+[MapDefault(typeof(User), nameof(UserDto.Name), ""Unknown"")]
+public sealed class UserDto
+{
+    public string Name { get; set; } = """";
+}
+");
+
+        Assert.NotNull(result.GeneratedSource);
+        Assert.Contains("destination.Name = source.Name ?? \"Unknown\";", result.GeneratedSource);
+        Assert.Contains("Name = source.Name ?? \"Unknown\"", result.GeneratedSource);
+        AssertNoCompileErrors(result);
+    }
+
+    [Fact]
+    public void MapFrom_GenerateReverse_ConditionAndConverterNotCarriedToReverseDirection()
+    {
+        // Same rule as [MapTo]'s GenerateReverse: conditions/converters are tied to the
+        // original declaration and aren't auto-reversed. Here that means User.FirstName is
+        // left unmapped in the reverse direction (GM001) since UserDto.FullName has no
+        // matching User property by name and [MapUsing] wasn't declared for that direction.
+        var result = GeneratorTestHelper.Run(@"
+using GeneratedMapper;
+
+namespace Sample;
+
+public sealed class User
+{
+    public string FirstName { get; set; } = """";
+}
+
+[MapFrom(typeof(User), GenerateReverse = true)]
+[MapUsing(typeof(User), nameof(FullName), nameof(ComputeFullName))]
+public sealed class UserDto
+{
+    public string FullName { get; set; } = """";
+
+    public static string ComputeFullName(User source) => source.FirstName;
+}
+");
+
+        Assert.NotNull(result.GeneratedSource);
+        Assert.Contains("ToUserDto(this global::Sample.User source)", result.GeneratedSource);
+        Assert.Contains("ToUser(this global::Sample.UserDto source)", result.GeneratedSource);
+        Assert.Contains("destination.FullName = global::Sample.UserDto.ComputeFullName(source);", result.GeneratedSource);
+        Assert.Contains(result.GeneratorDiagnostics, d => d.Id == "GM001");
+        AssertNoCompileErrors(result);
+    }
+
+    [Fact]
+    public void DuplicateMapTo_SameDestinationDeclaredTwice_ReportsGM011()
+    {
+        var result = GeneratorTestHelper.Run(@"
+using GeneratedMapper;
+
+namespace Sample;
+
+[MapTo(typeof(UserDto))]
+[MapTo(typeof(UserDto))]
+public sealed class User
+{
+    public int Id { get; set; }
+}
+
+public sealed class UserDto
+{
+    public int Id { get; set; }
+}
+");
+
+        Assert.NotNull(result.GeneratedSource);
+        Assert.Contains(result.GeneratorDiagnostics, d => d.Id == "GM011" && d.Severity == DiagnosticSeverity.Warning);
+        // Both declarations agree, so the mapping itself still comes out fine either way.
+        Assert.Contains("public static global::Sample.UserDto ToUserDto(this global::Sample.User source)", result.GeneratedSource);
+        AssertNoCompileErrors(result);
+    }
+
+    [Fact]
+    public void MapToAndMapFrom_SamePairDeclaredOnBothSides_ReportsGM011()
+    {
+        var result = GeneratorTestHelper.Run(@"
+using GeneratedMapper;
+
+namespace Sample;
+
+[MapTo(typeof(UserDto))]
+public sealed class User
+{
+    public int Id { get; set; }
+}
+
+[MapFrom(typeof(User))]
+public sealed class UserDto
+{
+    public int Id { get; set; }
+}
+");
+
+        Assert.NotNull(result.GeneratedSource);
+        Assert.Contains(result.GeneratorDiagnostics, d => d.Id == "GM011" && d.Severity == DiagnosticSeverity.Warning);
+        Assert.Contains("public static global::Sample.UserDto ToUserDto(this global::Sample.User source)", result.GeneratedSource);
+        AssertNoCompileErrors(result);
+    }
+
+    [Fact]
+    public void GenerateReverse_ImpliedPairCollidingWithExplicitDeclaration_ReportsGM011()
+    {
+        // GenerateReverse on User -> UserDto implies UserDto -> User; an explicit [MapFrom]
+        // on User declaring that same UserDto -> User pair collides with it.
+        var result = GeneratorTestHelper.Run(@"
+using GeneratedMapper;
+
+namespace Sample;
+
+[MapTo(typeof(UserDto), GenerateReverse = true)]
+[MapFrom(typeof(UserDto))]
+public sealed class User
+{
+    public int Id { get; set; }
+}
+
+public sealed class UserDto
+{
+    public int Id { get; set; }
+}
+");
+
+        Assert.NotNull(result.GeneratedSource);
+        Assert.Contains(result.GeneratorDiagnostics, d => d.Id == "GM011" && d.Severity == DiagnosticSeverity.Warning);
+        AssertNoCompileErrors(result);
+    }
+
+    [Fact]
+    public void DistinctMappingPairs_MixingMapToAndMapFrom_DoesNotReportGM011()
+    {
+        // Different pairs declared via different attributes in the same compilation - no
+        // collision, no GM011.
+        var result = GeneratorTestHelper.Run(@"
+using GeneratedMapper;
+
+namespace Sample;
+
+[MapTo(typeof(OrderDto))]
+public sealed class Order
+{
+    public int Id { get; set; }
+}
+
+public sealed class OrderDto
+{
+    public int Id { get; set; }
+}
+
+public sealed class User
+{
+    public int Id { get; set; }
+}
+
+[MapFrom(typeof(User))]
+public sealed class UserDto
+{
+    public int Id { get; set; }
+}
+");
+
+        Assert.NotNull(result.GeneratedSource);
+        Assert.DoesNotContain(result.GeneratorDiagnostics, d => d.Id == "GM011");
+        AssertNoCompileErrors(result);
+    }
+
+    [Fact]
+    public void CombinedMapFromAndMapTo_EachDirectionNeedsItsOwnCorrectlyOrientedMapProperty()
+    {
+        // [MapFrom(typeof(User))] and [MapTo(typeof(User))] on the same UserDto share the same
+        // "other side" type (User), which is what MappingDiscovery uses to match a [MapProperty]
+        // to a declaration. A single [MapProperty(typeof(User), "Email", "EmailAddress")] would
+        // only correctly configure the User -> UserDto direction (source property "Email" found
+        // on User); the UserDto -> User direction needs its own, oppositely-oriented
+        // [MapProperty(typeof(User), "EmailAddress", "Email")]. Both coexist without collision
+        // because they're keyed by different DestinationProperty names (EmailAddress vs Email),
+        // and each direction's resolver only ever looks up the key matching its own destination
+        // type's property name.
+        var result = GeneratorTestHelper.Run(@"
+using GeneratedMapper;
+
+namespace Sample;
+
+public sealed class User
+{
+    public string Email { get; set; } = """";
+}
+
+[MapFrom(typeof(User))]
+[MapProperty(typeof(User), nameof(User.Email), nameof(EmailAddress))]
+[MapTo(typeof(User))]
+[MapProperty(typeof(User), nameof(EmailAddress), nameof(User.Email))]
+public sealed class UserDto
+{
+    public string EmailAddress { get; set; } = """";
+}
+");
+
+        Assert.NotNull(result.GeneratedSource);
+        Assert.Contains("public static global::Sample.UserDto ToUserDto(this global::Sample.User source)", result.GeneratedSource);
+        Assert.Contains("destination.EmailAddress = source.Email;", result.GeneratedSource);
+        Assert.Contains("public static global::Sample.User ToUser(this global::Sample.UserDto source)", result.GeneratedSource);
+        Assert.Contains("destination.Email = source.EmailAddress;", result.GeneratedSource);
+        AssertNoCompileErrors(result);
+    }
+
+    [Fact]
+    public void CombinedMapFromAndMapTo_SingleMapPropertyOnlyConfiguresItsOwnDirection_OtherDirectionReportsGM001()
+    {
+        // The failure mode if you forget the second, oppositely-oriented [MapProperty]: only
+        // one direction gets the rename, the other silently falls back to exact-name matching,
+        // finds nothing, and reports GM001 instead of using the rename you (probably) meant for
+        // both directions.
+        var result = GeneratorTestHelper.Run(@"
+using GeneratedMapper;
+
+namespace Sample;
+
+public sealed class User
+{
+    public string Email { get; set; } = """";
+}
+
+[MapFrom(typeof(User))]
+[MapProperty(typeof(User), nameof(User.Email), nameof(EmailAddress))]
+[MapTo(typeof(User))]
+public sealed class UserDto
+{
+    public string EmailAddress { get; set; } = """";
+}
+");
+
+        Assert.NotNull(result.GeneratedSource);
+        Assert.Contains("destination.EmailAddress = source.Email;", result.GeneratedSource);
+        Assert.Contains(result.GeneratorDiagnostics, d => d.Id == "GM001" && d.GetMessage().Contains("Email"));
+        AssertNoCompileErrors(result);
+    }
+
+    [Fact]
+    public void CombinedMapFromAndMapTo_DuplicatedInsteadOfReversedMapProperty_OtherDirectionStillReportsGM001()
+    {
+        // A plausible mistake: instead of writing a second, oppositely-oriented [MapProperty]
+        // for the other direction, the same one gets pasted twice. GroupBy+last-wins collapses
+        // the duplicate down to one dictionary entry keyed by "EmailAddress" - which only the
+        // User -> UserDto direction ever looks up. UserDto -> User still has no entry keyed
+        // "Email" to find, so it falls back to exact-name matching, finds nothing, and reports
+        // GM001 - same failure mode as never adding a second attribute at all.
+        var result = GeneratorTestHelper.Run(@"
+using GeneratedMapper;
+
+namespace Sample;
+
+public sealed class User
+{
+    public string Email { get; set; } = """";
+}
+
+[MapFrom(typeof(User))]
+[MapProperty(typeof(User), nameof(User.Email), nameof(EmailAddress))]
+[MapTo(typeof(User))]
+[MapProperty(typeof(User), nameof(User.Email), nameof(EmailAddress))]
+public sealed class UserDto
+{
+    public string EmailAddress { get; set; } = """";
+}
+");
+
+        Assert.NotNull(result.GeneratedSource);
+        Assert.Contains("destination.EmailAddress = source.Email;", result.GeneratedSource);
+        Assert.Contains(result.GeneratorDiagnostics, d => d.Id == "GM001" && d.GetMessage().Contains("Email") && d.GetMessage().Contains("User"));
+        Assert.DoesNotContain("destination.Email = ", result.GeneratedSource);
+        AssertNoCompileErrors(result);
+    }
+
+    [Fact]
+    public void CombinedMapFromAndMapTo_DoesNotFalsePositivelyReportGM011()
+    {
+        // [MapFrom(typeof(User))] and [MapTo(typeof(User))] on the same UserDto declare two
+        // *different* pairs - (User, UserDto) and (UserDto, User) - so this must not collide
+        // with the duplicate-declaration diagnostic added for exactly this kind of ambiguity.
+        var result = GeneratorTestHelper.Run(@"
+using GeneratedMapper;
+
+namespace Sample;
+
+public sealed class User
+{
+    public int Id { get; set; }
+}
+
+[MapFrom(typeof(User))]
+[MapTo(typeof(User))]
+public sealed class UserDto
+{
+    public int Id { get; set; }
+}
+");
+
+        Assert.NotNull(result.GeneratedSource);
+        Assert.DoesNotContain(result.GeneratorDiagnostics, d => d.Id == "GM011");
+        Assert.Contains("public static global::Sample.UserDto ToUserDto(this global::Sample.User source)", result.GeneratedSource);
+        Assert.Contains("public static global::Sample.User ToUser(this global::Sample.UserDto source)", result.GeneratedSource);
+        AssertNoCompileErrors(result);
+    }
+
+    [Fact]
+    public void CombinedMapFromAndMapTo_SharedPropertyNameCondition_WrongSignatureDirectionReportsGM004()
+    {
+        // Both User and UserDto happen to have a property named "Body". A single
+        // [MapCondition(typeof(User), nameof(Body), nameof(ShouldMap))] gets picked up by both
+        // directions (matched purely by the shared otherSide type, same as [MapProperty]) -
+        // but only one static ShouldMap overload was actually written, accepting User. The
+        // User -> UserDto direction resolves fine; the UserDto -> User direction has no
+        // ShouldMap(UserDto) or ShouldMap(UserDto, User?) overload to find, and reports GM004
+        // instead of silently reusing the wrong one.
+        var result = GeneratorTestHelper.Run(@"
+using GeneratedMapper;
+
+namespace Sample;
+
+public sealed class User
+{
+    public string Body { get; set; } = """";
+}
+
+[MapFrom(typeof(User))]
+[MapTo(typeof(User))]
+[MapCondition(typeof(User), nameof(Body), nameof(ShouldMap))]
+public sealed class UserDto
+{
+    public string Body { get; set; } = """";
+
+    public static bool ShouldMap(User source) => !string.IsNullOrEmpty(source.Body);
+}
+");
+
+        Assert.NotNull(result.GeneratedSource);
+        // User -> UserDto: resolves against the User-accepting overload, gated correctly.
+        Assert.Contains("if (global::Sample.UserDto.ShouldMap(source))", result.GeneratedSource);
+        // UserDto -> User: no ShouldMap(UserDto) overload exists.
+        Assert.Contains(result.GeneratorDiagnostics, d => d.Id == "GM004" && d.Severity == DiagnosticSeverity.Error);
+        // "destination.Body" appears exactly once - the guarded assignment inside ToUserDto
+        // above. The failed condition means ToUser's Body property was skipped entirely
+        // (not emitted unconditioned, and not emitted with the wrong-direction guard either).
+        Assert.Single(Regex.Matches(result.GeneratedSource!, "destination\\.Body"));
+        AssertNoCompileErrors(result);
+    }
+
+    [Fact]
+    public void CombinedMapFromAndMapTo_PerDirectionMapUsing_OneDirectionMissingMethod_ReportsGM009ForThatDirectionOnly()
+    {
+        // Each direction has its own [MapUsing], correctly scoped by destinationProperty (same
+        // mechanism verified for [MapProperty] above). The User -> UserDto converter exists;
+        // the UserDto -> User one is misspelled, so only that direction reports GM009 - the
+        // other direction's converter is unaffected.
+        var result = GeneratorTestHelper.Run(@"
+using GeneratedMapper;
+
+namespace Sample;
+
+public sealed class User
+{
+    public string FirstName { get; set; } = """";
+    public string LastName { get; set; } = """";
+}
+
+[MapFrom(typeof(User))]
+[MapUsing(typeof(User), nameof(FullName), nameof(ComputeFullName))]
+[MapTo(typeof(User))]
+[MapUsing(typeof(User), nameof(User.FirstName), ""DoesNotExist"")]
+public sealed class UserDto
+{
+    public string FullName { get; set; } = """";
+
+    public static string ComputeFullName(User source) => $""{source.FirstName} {source.LastName}"";
+}
+");
+
+        Assert.NotNull(result.GeneratedSource);
+        Assert.Contains("destination.FullName = global::Sample.UserDto.ComputeFullName(source);", result.GeneratedSource);
+        Assert.Contains(result.GeneratorDiagnostics, d => d.Id == "GM009" && d.Severity == DiagnosticSeverity.Error);
+        Assert.DoesNotContain("destination.FirstName", result.GeneratedSource);
         AssertNoCompileErrors(result);
     }
 

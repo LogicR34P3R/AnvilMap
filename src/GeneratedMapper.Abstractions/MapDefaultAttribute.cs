@@ -15,6 +15,10 @@ namespace GeneratedMapper;
 /// string, bool, char, or enum constant — not an arbitrary expression. Not auto-reversed by
 /// <see cref="MapToAttribute.GenerateReverse"/>: declare a separate <see cref="MapDefaultAttribute"/>
 /// on the destination type if the reverse direction needs one.
+///
+/// Can also be placed on a destination type decorated with <see cref="MapFromAttribute"/>
+/// instead of on the source - in that case, pass the source type as <c>destinationType</c>
+/// (naming the mapping this default applies to), same as when declared on the source side.
 /// </remarks>
 [AttributeUsage(AttributeTargets.Class | AttributeTargets.Struct, AllowMultiple = true, Inherited = false)]
 public sealed class MapDefaultAttribute : Attribute
