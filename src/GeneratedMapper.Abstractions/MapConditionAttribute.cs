@@ -7,6 +7,12 @@ namespace GeneratedMapper;
 /// Not honored by SQL projections (<c>ProjectTo*</c>) — the property is left at its default
 /// there instead, since the condition can't be translated into the query.
 /// </summary>
+/// <remarks>
+/// Can also be placed on a destination type decorated with <see cref="MapFromAttribute"/>
+/// instead of on the source - in that case, pass the source type as <c>destinationType</c>,
+/// and the condition method is looked up on the destination type (the one this attribute is
+/// declared on) instead of the source.
+/// </remarks>
 [AttributeUsage(AttributeTargets.Class | AttributeTargets.Struct, AllowMultiple = true, Inherited = false)]
 public sealed class MapConditionAttribute : Attribute
 {

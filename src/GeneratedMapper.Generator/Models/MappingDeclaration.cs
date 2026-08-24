@@ -13,6 +13,13 @@ internal sealed record MappingDeclaration(
     TypeModel Destination,
     INamedTypeSymbol SourceSymbol,
     INamedTypeSymbol DestinationSymbol,
+    // The type that physically carries [MapTo]/[MapFrom] (and any companion attributes) for
+    // this declaration - SourceSymbol for a [MapTo]-declared mapping, DestinationSymbol for a
+    // [MapFrom]-declared one. [MapCondition]/[MapUsing] methods are looked up here, not
+    // necessarily on SourceSymbol, so that a [MapFrom]-declared mapping's methods can live on
+    // the destination (e.g. a DTO that's allowed to know about the entity) instead of forcing
+    // the entity to know about the DTO.
+    INamedTypeSymbol MethodHostSymbol,
     bool GenerateReverse,
     IReadOnlyList<ExplicitPropertyMapping> ExplicitProperties,
     IReadOnlyList<ExplicitConditionMapping> ExplicitConditions,
@@ -25,6 +32,9 @@ internal sealed record MappingDeclaration(
     // MappingGraph's reverse-construction call site. Conditions/converters/defaults reset to
     // empty - all three are tied to the original source type, so a reverse mapping needs its
     // own [MapCondition]/[MapUsing]/[MapDefault]. MaxDepth carries over unchanged.
+    // MethodHostSymbol is left unchanged (still the original declaring type) - inert either
+    // way since the explicit collections below are wiped, but it's the closest thing to "where
+    // a reverse-direction attribute would be declared" if one existed.
     public MappingDeclaration ToReverse() => this with
     {
         Source = Destination,

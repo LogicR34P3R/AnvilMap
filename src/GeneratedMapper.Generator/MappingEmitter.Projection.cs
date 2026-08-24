@@ -93,7 +93,7 @@ internal static partial class MappingEmitter
                     BuildEnumerableProjection(property, byPair, sourceExpr, visiting, report),
 
                 PropertyMappingKind.Converted =>
-                    $"{mapping.Source.FullyQualifiedName}.{property.ConverterMethodName}({sourceExpr})",
+                    $"{property.MethodHostType!.FullyQualifiedName}.{property.ConverterMethodName}({sourceExpr})",
 
                 _ => null
             };

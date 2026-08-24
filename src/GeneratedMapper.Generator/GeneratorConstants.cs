@@ -5,6 +5,7 @@ namespace GeneratedMapper.Generator;
 internal static class GeneratorConstants
 {
     public const string MapToAttribute = "GeneratedMapper.MapToAttribute";
+    public const string MapFromAttribute = "GeneratedMapper.MapFromAttribute";
     public const string MapPropertyAttribute = "GeneratedMapper.MapPropertyAttribute";
     public const string MapIgnoreAttribute = "GeneratedMapper.MapIgnoreAttribute";
     public const string MapConditionAttribute = "GeneratedMapper.MapConditionAttribute";
