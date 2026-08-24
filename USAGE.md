@@ -14,7 +14,7 @@ GeneratedMapper isn't published to nuget.org yet. Until it is, you have two ways
 ```
 dotnet pack GeneratedMapper.sln -c Release -o ./nupkg-out
 ```
-~~~~
+
 then add a `nuget.config` pointing at that folder in your own project and
 
 ```
