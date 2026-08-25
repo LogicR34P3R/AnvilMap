@@ -36,7 +36,7 @@ jobs:
       # the Abstractions types entirely, and a System.Collections.Immutable version pinned far
       # above what Roslyn 4.8.0 itself depends on, breaking generator load in an older host) were
       # only caught by actually installing the packed .nupkg into a separate consumer project and
-      # building/running it - see docs/roadmap.md F5. smoke-test/ConsumerSmokeTest is a real,
+      # building/running it. smoke-test/ConsumerSmokeTest is a real,
       # tracked, minimal console project kept outside GeneratedMapper.sln for exactly this: its
       # nuget.config points at ../../nupkg-out (this step's output), so restoring it here
       # reproduces the same check on every push/PR.

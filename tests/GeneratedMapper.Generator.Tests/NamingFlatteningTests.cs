@@ -4,10 +4,10 @@ using Xunit;
 
 namespace GeneratedMapper.Generator.Tests;
 
-// F9: naming-convention flattening (docs/roadmapv2.md). Covers the resolver-side path matching
-// only - MappingEmitter needs no changes at all, since a flattened destination just gets a
-// dotted SourcePropertyName ("HomeAddress.City") that every existing `source.{...}` interpolation
-// already treats as an opaque C# member-access expression.
+// Naming-convention flattening. Covers the resolver-side path matching only - MappingEmitter
+// needs no changes at all, since a flattened destination just gets a dotted SourcePropertyName
+// ("HomeAddress.City") that every existing `source.{...}` interpolation already treats as an
+// opaque C# member-access expression.
 public class NamingFlatteningTests
 {
     [Fact]

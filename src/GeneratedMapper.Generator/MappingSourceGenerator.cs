@@ -94,8 +94,14 @@ public sealed class MappingSourceGenerator : IIncrementalGenerator
                 .Max();
             var useNullableReferenceTypes = languageVersion >= LanguageVersion.CSharp8;
 
+            // Prerequisite for any future .NET 10/C# 14-gated emission - nothing consumes this
+            // yet, this just makes the capability queryable.
+            var useCSharp14 = languageVersion >= LanguageVersion.CSharp14;
+
+            var capabilities = new ConsumerCapabilities(canUseFrozenDictionary, useNullableReferenceTypes, useCSharp14);
+
             // Stage 4 - emission: one generated file for the whole compilation.
-            var source = MappingEmitter.Emit(models, canUseFrozenDictionary, useNullableReferenceTypes, spc.ReportDiagnostic);
+            var source = MappingEmitter.Emit(models, capabilities, spc.ReportDiagnostic);
             spc.AddSource("GeneratedMappings.g.cs", source);
         });
     }

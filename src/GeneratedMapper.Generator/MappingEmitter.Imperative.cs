@@ -21,16 +21,17 @@ internal static partial class MappingEmitter
     private static void EmitMapping(
         StringBuilder sb,
         MappingModel mapping,
-        bool useNullableReferenceTypes,
+        ConsumerCapabilities capabilities,
         System.Action<Diagnostic>? report)
     {
+        var useNullableReferenceTypes = capabilities.UseNullableReferenceTypes;
         var source = mapping.Source.FullyQualifiedName;
         var destination = mapping.Destination.FullyQualifiedName;
         var methodName = $"To{mapping.Destination.SimpleName}";
 
         if (mapping.ConstructorParameterProperties is { Count: > 0 } constructorProperties)
         {
-            EmitConstructorBasedMapping(sb, mapping, constructorProperties, source, destination, methodName, useNullableReferenceTypes, report);
+            EmitConstructorBasedMapping(sb, mapping, constructorProperties, source, destination, methodName, capabilities, report);
             return;
         }
 
@@ -124,9 +125,11 @@ internal static partial class MappingEmitter
         string source,
         string destination,
         string methodName,
-        bool useNullableReferenceTypes,
+        ConsumerCapabilities capabilities,
         System.Action<Diagnostic>? report)
     {
+        var useNullableReferenceTypes = capabilities.UseNullableReferenceTypes;
+
         report?.Invoke(Diagnostic.Create(
             Diagnostics.TwoArgMapperOmittedInitOnly,
             Location.None,
