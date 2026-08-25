@@ -67,6 +67,36 @@ public sealed class UserDto
 
 A given mapping only needs one of `[MapTo]`/`[MapFrom]` — pick whichever side is allowed to reference the other in your architecture. Nothing else in this document depends on which one was used; every example below works identically declared either way. Declaring the same source/destination pair twice — via both `[MapTo]` and `[MapFrom]`, two `[MapTo]`s to the same destination, or a `GenerateReverse`-implied pair colliding with an explicit declaration — is reported as `GM011`; only the last declaration encountered is actually used.
 
+### Independent reverse mapping
+
+`GenerateReverse = true` is the quick way to get both directions, but `[MapCondition]`/`[MapUsing]`/`[MapDefault]` are never auto-reversed by it — the reverse direction just leaves that property unconditioned/unconverted/without a fallback unless you declare it separately. To get both directions *each with their own* condition/converter/default, put both `[MapFrom]` and `[MapTo]` — naming the same other type — on one class instead of using `GenerateReverse`:
+
+```csharp
+public sealed class User
+{
+    public string Email { get; set; } = "";
+}
+
+[MapFrom(typeof(User))]                                              // User -> UserDto
+[MapProperty(typeof(User), nameof(User.Email), nameof(EmailAddress))]
+[MapCondition(typeof(User), nameof(EmailAddress), nameof(ShouldMapEmailForward))]
+
+[MapTo(typeof(User))]                                                // UserDto -> User
+[MapProperty(typeof(User), nameof(EmailAddress), nameof(User.Email))]
+[MapCondition(typeof(User), nameof(User.Email), nameof(ShouldMapEmailBackward))]
+public sealed class UserDto
+{
+    public string EmailAddress { get; set; } = "";
+
+    public static bool ShouldMapEmailForward(User source) => !string.IsNullOrEmpty(source.Email);
+    public static bool ShouldMapEmailBackward(UserDto source) => !string.IsNullOrEmpty(source.EmailAddress);
+}
+```
+
+This produces both `User.ToUserDto()` and `UserDto.ToUser()`, same as `GenerateReverse`, but as two fully independent declarations — it does **not** trigger `GM011`, because `[MapFrom(typeof(User))]` and `[MapTo(typeof(User))]` name two different pairs (`User → UserDto` and `UserDto → User`), not the same pair twice. `GM011` only fires when the *same* pair and direction gets declared more than once (e.g. `[MapTo(typeof(UserDto))]` on `User` *and* `[MapFrom(typeof(User))]` on `UserDto` — that's the identical `User → UserDto` direction declared from both sides).
+
+The two directions don't collide even though every companion attribute above names the same `Type` argument (`typeof(User)`): what actually separates them is the destination-property name in each attribute — `EmailAddress` only exists on `UserDto` (the `[MapFrom]` direction's destination), `Email` only exists on `User` (the `[MapTo]` direction's destination). One real footgun: each direction needs its *own*, oppositely-oriented companion attribute — reusing the same `[MapProperty(typeof(User), nameof(User.Email), nameof(EmailAddress))]` for both (instead of writing a second one with the arguments swapped) only configures the `[MapFrom]` direction; the other one silently falls back to exact-name matching, finds nothing, and reports `GM001`.
+
 ### Conditional mapping
 
 ```csharp
