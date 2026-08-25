@@ -17,7 +17,11 @@ jobs:
       - name: Setup .NET
         uses: actions/setup-dotnet@v4
         with:
-          dotnet-version: "8.0.x"
+          # 10.0.x, not 8.0.x: benchmarks/GeneratedMapper.Benchmarks multi-targets up to net10.0
+          # (a TFM the 8.0.x SDK doesn't recognize at all - a newer SDK can still build every
+          # older TFM in this solution (netstandard2.0, net6.0, net8.0) without needing those
+          # SDKs installed too, since TFM support comes from NuGet ref packs, not SDK version).
+          dotnet-version: "10.0.x"
 
       - name: Restore
         run: dotnet restore GeneratedMapper.sln
