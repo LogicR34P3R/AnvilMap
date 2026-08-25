@@ -1,5 +1,7 @@
+using AutoMapper;
 using BenchmarkDotNet.Attributes;
 using BenchmarkDotNet.Jobs;
+using GeneratedMapper.Benchmarks.AutoMapperConfig;
 using GeneratedMapper.Benchmarks.Models;
 
 namespace GeneratedMapper.Benchmarks.Scenarios;
@@ -13,6 +15,7 @@ namespace GeneratedMapper.Benchmarks.Scenarios;
 public class NestedRuntimeComparisonBenchmarks
 {
     private OrderSource _source = null!;
+    private AutoMapper.IMapper _autoMapper = null!;
 
     [GlobalSetup]
     public void Setup()
@@ -24,6 +27,8 @@ public class NestedRuntimeComparisonBenchmarks
             Total = 249.5m,
             Customer = new CustomerSource { Id = 1, Name = "Ada Lovelace", Email = "ada@example.com" },
         };
+
+        _autoMapper = BenchmarkMapperFactory.CreateMapper();
     }
 
     [Benchmark(Baseline = true, Description = "GeneratedMapper (extension method)")]
@@ -31,4 +36,7 @@ public class NestedRuntimeComparisonBenchmarks
 
     [Benchmark(Description = "GeneratedMapper (dispatcher)")]
     public OrderDto Dispatcher() => GeneratedMappings.Map<OrderDto>(_source);
+
+    [Benchmark(Description = "AutoMapper")]
+    public OrderDto AutoMapper() => _autoMapper.Map<OrderDto>(_source);
 }

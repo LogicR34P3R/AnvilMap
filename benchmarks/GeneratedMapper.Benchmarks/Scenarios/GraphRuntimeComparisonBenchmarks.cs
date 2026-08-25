@@ -1,5 +1,7 @@
+using AutoMapper;
 using BenchmarkDotNet.Attributes;
 using BenchmarkDotNet.Jobs;
+using GeneratedMapper.Benchmarks.AutoMapperConfig;
 using GeneratedMapper.Benchmarks.Models;
 
 namespace GeneratedMapper.Benchmarks.Scenarios;
@@ -9,7 +11,9 @@ namespace GeneratedMapper.Benchmarks.Scenarios;
 // GraphMappingBenchmarks also runs a 100,000-post stress case, but that one already takes tens
 // of milliseconds per call on a single runtime; multiplying it by three runtimes' worth of
 // [SimpleJob] iterations would balloon this class's own run time for a data point this
-// comparison doesn't need (the runtime-vs-runtime gap is already visible at 1,000).
+// comparison doesn't need (the runtime-vs-runtime gap is already visible at 1,000). Also worth
+// noting: GraphMappingBenchmarks (net8.0 only) is the one scenario in docs/benchmarks.md where
+// AutoMapper wins outright - this class is where that finding gets checked across runtimes too.
 [SimpleJob(RuntimeMoniker.Net60)]
 [SimpleJob(RuntimeMoniker.Net80)]
 [SimpleJob(RuntimeMoniker.Net10_0)]
@@ -22,6 +26,7 @@ public class GraphRuntimeComparisonBenchmarks
     public int PostCount { get; set; }
 
     private GraphBlog _source = null!;
+    private AutoMapper.IMapper _autoMapper = null!;
 
     [GlobalSetup]
     public void Setup()
@@ -37,6 +42,8 @@ public class GraphRuntimeComparisonBenchmarks
         }
 
         _source = new GraphBlog { Id = 1, Title = "Benchmarks", Posts = posts };
+
+        _autoMapper = BenchmarkMapperFactory.CreateMapper();
     }
 
     [Benchmark(Baseline = true, Description = "GeneratedMapper (extension method)")]
@@ -44,4 +51,7 @@ public class GraphRuntimeComparisonBenchmarks
 
     [Benchmark(Description = "GeneratedMapper (dispatcher)")]
     public GraphBlogDto Dispatcher() => GeneratedMappings.Map<GraphBlogDto>(_source);
+
+    [Benchmark(Description = "AutoMapper")]
+    public GraphBlogDto AutoMapper() => _autoMapper.Map<GraphBlogDto>(_source);
 }

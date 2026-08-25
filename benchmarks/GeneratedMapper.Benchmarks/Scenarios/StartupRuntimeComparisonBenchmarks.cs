@@ -1,7 +1,9 @@
+using AutoMapper;
 using BenchmarkDotNet.Attributes;
 using BenchmarkDotNet.Configs;
 using BenchmarkDotNet.Engines;
 using BenchmarkDotNet.Jobs;
+using GeneratedMapper.Benchmarks.AutoMapperConfig;
 using GeneratedMapper.Benchmarks.Models;
 
 namespace GeneratedMapper.Benchmarks.Scenarios;
@@ -40,5 +42,17 @@ public class StartupRuntimeComparisonBenchmarks
     {
         var source = new FlatSource { Id = 1, Name = "Widget", CreatedAt = DateTime.UtcNow, IsActive = true, Amount = 19.99m };
         return source.ToFlatDto();
+    }
+
+    [Benchmark(Description = "AutoMapper (build MapperConfiguration)")]
+    public MapperConfiguration AutoMapper_BuildConfiguration()
+        => BenchmarkMapperFactory.CreateConfiguration();
+
+    [Benchmark(Description = "AutoMapper (build + AssertConfigurationIsValid)")]
+    public MapperConfiguration AutoMapper_BuildAndValidateConfiguration()
+    {
+        var config = BenchmarkMapperFactory.CreateConfiguration();
+        config.AssertConfigurationIsValid();
+        return config;
     }
 }
