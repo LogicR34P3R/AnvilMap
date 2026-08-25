@@ -4,7 +4,7 @@
        GeneratedMapper NuGet packages from a local feed (nuget.config, next to this file) exactly
        the way a real external consumer would, via a plain `<PackageReference>` - never as a
        ProjectReference/analyzer wired in directly like the rest of this repo does. See
-       docs/roadmap.md F5 and .github/workflows/ci.yml's "Smoke-test packages" step. -->
+       .github/workflows/ci.yml's "Smoke-test packages" step. -->
   <PropertyGroup>
     <OutputType>Exe</OutputType>
     <TargetFramework>net8.0</TargetFramework>

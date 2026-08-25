@@ -24,7 +24,7 @@
          Abstractions' compile-time lib/ asset too, so a consumer's own code can't see
          [MapTo]/IMapper at all despite everything restoring "successfully". Caught via a real
          `dotnet add package` in a scratch project outside this solution, not just `dotnet build`
-         inside it - see docs/roadmap.md F5's own risk note.
+         inside it.
 
          This project's own build output is packed manually below into analyzers/dotnet/cs,
          not into lib/ - there is no ordinary compile-time API surface to ship. -->
@@ -34,18 +34,17 @@
     <NoWarn>$(NoWarn);NU5128</NoWarn>
   </PropertyGroup>
   <ItemGroup>
-    <!-- Bumped from 4.8.0 for docs/roadmapv3.md F11: LanguageVersion.CSharp14 doesn't exist
-         below Roslyn 5.0 - confirmed empirically (a scratch project referencing 4.14.0, the
-         highest 4.x release, still fails CS0117 on LanguageVersion.CSharp14; 5.0.0 is the first
-         version where it compiles). Deliberately pinned to exactly 5.0.0, NOT the latest 5.x
-         (5.9.0 was tried first) - this repo's own newest installed SDK (10.0.100) bundles a
-         host compiler that reports as Microsoft.CodeAnalysis Version=5.0.0.0, and referencing
-         5.9.0 produced CS9057 ("analyzer assembly ... references version 5.9.0.0 of the
-         compiler, which is newer than the currently running version 5.0.0.0") - the exact
-         load-failure class this AD/F11 risk note warned about, reproduced on the *newest*
-         available SDK, not just an old one. 5.0.0 is therefore the highest version verified not
-         to hit that failure locally; still needs checking against whatever the true oldest
-         IDE/SDK this project claims to support bundles, per F11's own risk note. -->
+    <!-- Bumped from 4.8.0: LanguageVersion.CSharp14 doesn't exist below Roslyn 5.0 - confirmed
+         empirically (a scratch project referencing 4.14.0, the highest 4.x release, still fails
+         CS0117 on LanguageVersion.CSharp14; 5.0.0 is the first version where it compiles).
+         Deliberately pinned to exactly 5.0.0, NOT the latest 5.x (5.9.0 was tried first) - this
+         repo's own newest installed SDK (10.0.100) bundles a host compiler that reports as
+         Microsoft.CodeAnalysis Version=5.0.0.0, and referencing 5.9.0 produced CS9057 ("analyzer
+         assembly ... references version 5.9.0.0 of the compiler, which is newer than the
+         currently running version 5.0.0.0"), reproduced on the *newest* available SDK, not just
+         an old one. 5.0.0 is therefore the highest version verified not to hit that failure
+         locally; still needs checking against whatever the true oldest IDE/SDK this project
+         claims to support bundles. -->
     <PackageReference Include="Microsoft.CodeAnalysis.CSharp" Version="5.0.0" PrivateAssets="all" />
 
     <!-- Deliberately no PrivateAssets here (unlike Microsoft.CodeAnalysis.CSharp above): the
@@ -59,9 +58,9 @@
          contains this project's own DLL regardless, so this doesn't affect what the .nupkg ships.
 
          Version pinned to 9.0.0 - matching exactly what Microsoft.CodeAnalysis.Common 5.0.0
-         itself depends on for its netstandard2.0 group (checked its own .nuspec after the F11
-         Roslyn bump above, and re-checked after dropping the initial 5.9.0 attempt down to
-         5.0.0 - see that PackageReference's own comment), same reasoning as before: a version
+         itself depends on for its netstandard2.0 group (checked its own .nuspec after the Roslyn
+         bump above, and re-checked after dropping the initial 5.9.0 attempt down to 5.0.0 - see
+         that PackageReference's own comment), same reasoning as before: a version
          far above what the referenced Roslyn build was tested against is exactly the kind of
          thing that loads fine inside this repo's own newer SDK but throws FileNotFoundException
          inside an older real consumer's compiler host. -->

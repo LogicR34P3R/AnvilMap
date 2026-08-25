@@ -94,9 +94,8 @@ public sealed class MappingSourceGenerator : IIncrementalGenerator
                 .Max();
             var useNullableReferenceTypes = languageVersion >= LanguageVersion.CSharp8;
 
-            // docs/roadmapv3.md F11 - prerequisite for any .NET 10/C# 14-gated emission
-            // (nothing consumes this yet; see F12's "investigated, nothing to build" and F14's
-            // "blocked on AD6" writeups for why).
+            // Prerequisite for any future .NET 10/C# 14-gated emission - nothing consumes this
+            // yet, this just makes the capability queryable.
             var useCSharp14 = languageVersion >= LanguageVersion.CSharp14;
 
             var capabilities = new ConsumerCapabilities(canUseFrozenDictionary, useNullableReferenceTypes, useCSharp14);
