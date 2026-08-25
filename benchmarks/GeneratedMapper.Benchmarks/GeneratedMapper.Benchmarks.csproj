@@ -14,16 +14,31 @@
          individuals and organizations under $5M annual revenue). -->
     <PackageReference Include="AutoMapper" Version="16.2.0" />
     <PackageReference Include="BenchmarkDotNet" Version="0.15.8" />
-    <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" Version="8.0.10" />
+    <!-- Only has net8.0 assets (no netstandard2.0/net6.0 fallback, no dedicated net10.0 build) -
+         excluded below for net6.0, where it can't resolve at all; consumed via its net8.0 asset
+         under net10.0 (allowed - a newer TargetFramework can reference an older-targeted
+         package), which is why ProjectionBenchmarks/BenchmarkDbContext don't need excluding
+         there too. -->
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" Version="8.0.10" Condition="'$(TargetFramework)' != 'net6.0'" />
   </ItemGroup>
 
   <ItemGroup>
     <Compile Remove="$(CompilerGeneratedFilesOutputPath)/**/*.cs" />
+    <!-- Both files depend on Microsoft.EntityFrameworkCore.Sqlite, excluded above for net6.0 -
+         see that PackageReference's own comment. -->
+    <Compile Remove="Db/BenchmarkDbContext.cs" Condition="'$(TargetFramework)' == 'net6.0'" />
+    <Compile Remove="Scenarios/ProjectionBenchmarks.cs" Condition="'$(TargetFramework)' == 'net6.0'" />
   </ItemGroup>
 
   <PropertyGroup>
     <OutputType>Exe</OutputType>
-    <TargetFramework>net8.0</TargetFramework>
+    <!-- net6.0 stands in for netstandard2.0 here: netstandard2.0 itself can't run as an
+         executable, and net6.0 is what actually exercises the generator's netstandard2.0-shaped
+         fallback branches (no FrozenDictionary) since GeneratedMapper.Abstractions has no
+         net6.0-specific target - a net6.0 consumer resolves its netstandard2.0 asset. net10.0
+         added to compare against today's net8.0 baseline before any interceptor-dispatch work
+         (a possible future feature, gated on its own separate decision) exists to benchmark. -->
+    <TargetFrameworks>net6.0;net8.0;net10.0</TargetFrameworks>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <EmitCompilerGeneratedFiles>true</EmitCompilerGeneratedFiles>
