@@ -1,5 +1,7 @@
+using AutoMapper;
 using BenchmarkDotNet.Attributes;
 using BenchmarkDotNet.Jobs;
+using GeneratedMapper.Benchmarks.AutoMapperConfig;
 using GeneratedMapper.Benchmarks.Models;
 
 namespace GeneratedMapper.Benchmarks.Scenarios;
@@ -13,6 +15,7 @@ namespace GeneratedMapper.Benchmarks.Scenarios;
 public class ReverseRuntimeComparisonBenchmarks
 {
     private FlatDto _dto = null!;
+    private AutoMapper.IMapper _autoMapper = null!;
 
     [GlobalSetup]
     public void Setup()
@@ -25,6 +28,8 @@ public class ReverseRuntimeComparisonBenchmarks
             IsActive = true,
             Amount = 19.99m,
         };
+
+        _autoMapper = BenchmarkMapperFactory.CreateMapper();
     }
 
     [Benchmark(Baseline = true, Description = "GeneratedMapper (GenerateReverse extension method)")]
@@ -32,4 +37,7 @@ public class ReverseRuntimeComparisonBenchmarks
 
     [Benchmark(Description = "GeneratedMapper (dispatcher)")]
     public FlatSource Dispatcher() => GeneratedMappings.Map<FlatSource>(_dto);
+
+    [Benchmark(Description = "AutoMapper (second CreateMap<TDest, TSource>())")]
+    public FlatSource AutoMapper() => _autoMapper.Map<FlatSource>(_dto);
 }
