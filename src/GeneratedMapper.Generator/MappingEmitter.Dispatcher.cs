@@ -13,8 +13,9 @@ internal static partial class MappingEmitter
     private static void EmitGenericDispatcher(
         StringBuilder sb,
         IReadOnlyCollection<MappingModel> mappings,
-        bool useFrozenDictionary)
+        ConsumerCapabilities capabilities)
     {
+        var useFrozenDictionary = capabilities.CanUseFrozenDictionary;
         var mapType = useFrozenDictionary
             ? "FrozenDictionary<(Type Source, Type Destination), Func<object, object>>"
             : "Dictionary<(Type Source, Type Destination), Func<object, object>>";
