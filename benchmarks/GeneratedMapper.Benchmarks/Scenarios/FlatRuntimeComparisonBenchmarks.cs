@@ -10,14 +10,15 @@ namespace GeneratedMapper.Benchmarks.Scenarios;
 // FrozenDictionary below .NET 8; net6.0 stands in for netstandard2.0 since that TFM can't run
 // as an executable), net8.0 is today's baseline, net10.0 is the same generated code running on
 // the newer runtime. One BenchmarkDotNet report, one column per runtime, via [SimpleJob]
-// stacking - the project multi-targets net6.0;net8.0;net10.0 specifically so this class (and any
-// future one that wants the same comparison) only needs these three attributes, no other
-// project plumbing.
+// stacking - the project multi-targets net6.0;net8.0;net10.0 specifically so this class (and its
+// *RuntimeComparisonBenchmarks siblings, one per existing scenario shape) only needs these three
+// attributes, no other project plumbing. Flat is the shape this pattern was first verified
+// against (a real run, not just a build check) before being rolled out to the rest.
 [SimpleJob(RuntimeMoniker.Net60)]
 [SimpleJob(RuntimeMoniker.Net80)]
 [SimpleJob(RuntimeMoniker.Net10_0)]
 [MemoryDiagnoser]
-public class RuntimeComparisonBenchmarks
+public class FlatRuntimeComparisonBenchmarks
 {
     private FlatSource _source = null!;
 

@@ -24,10 +24,11 @@
 
   <ItemGroup>
     <Compile Remove="$(CompilerGeneratedFilesOutputPath)/**/*.cs" />
-    <!-- Both files depend on Microsoft.EntityFrameworkCore.Sqlite, excluded above for net6.0 -
+    <!-- All three depend on Microsoft.EntityFrameworkCore.Sqlite, excluded above for net6.0 -
          see that PackageReference's own comment. -->
     <Compile Remove="Db/BenchmarkDbContext.cs" Condition="'$(TargetFramework)' == 'net6.0'" />
     <Compile Remove="Scenarios/ProjectionBenchmarks.cs" Condition="'$(TargetFramework)' == 'net6.0'" />
+    <Compile Remove="Scenarios/ProjectionRuntimeComparisonBenchmarks.cs" Condition="'$(TargetFramework)' == 'net6.0'" />
   </ItemGroup>
 
   <PropertyGroup>
