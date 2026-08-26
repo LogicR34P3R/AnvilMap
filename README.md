@@ -193,44 +193,32 @@ A `required` destination property (C# 11) is set inline wherever the destination
 
 ## Native AOT
 
-Everything the generator emits — the imperative `To{Dest}()` methods, the dispatcher, `IMapper`
-— is plain, direct C# with no reflection at runtime, so it publishes and runs correctly under
-Native AOT (`dotnet publish -p:PublishAot=true`). `GeneratedMapper.Abstractions`'s net8.0 target
-opts into `<IsAotCompatible>true</IsAotCompatible>`, turning on the trimmer/AOT analyzer's own
-build-time warnings.
+Everything the generator emits — the imperative `To{Dest}()` methods, the dispatcher, `IMapper` —
+is plain, direct C# with no reflection at runtime, so it publishes and runs correctly under Native
+AOT (`dotnet publish -p:PublishAot=true`). `GeneratedMapper.Abstractions`'s net8.0 target opts into
+`<IsAotCompatible>true</IsAotCompatible>`, turning on the trimmer/AOT analyzer's build-time
+warnings. `samples/GeneratedMapper.Sample.Aot` is a small, EF-Core-free console app that's actually
+published with `PublishAot=true` and run — including calling `.Compile()` on a generated
+projection field directly, exactly what `IQueryable.Select()` does under the hood for an in-memory
+provider — to confirm this rather than just assert it.
 
-The one caveat: the C# compiler itself — not GeneratedMapper — compiles an object-initializer
-written inside an `Expression<Func<...>>` lambda (which is exactly what the
-`{Source}To{Destination}Projection` field above is) by calling
-`Expression.Bind(MethodInfo, Expression)`, a BCL method marked `[RequiresUnreferencedCode]`. That
-would normally surface as an `IL2026` trim warning on every consumer's own AOT publish, for every
-mapping that needs one, whether or not they ever call `ProjectTo{Destination}()`. "Needs one" is
-deliberately precise: a destination whose constructor covers every mapped property (e.g. a
-positional record) compiles to a pure `Expression.New(ctor, args)` with no trailing
-`{ Prop = value }` block at all - no `Expression.Bind` call, nothing to warn about, nothing to fix.
-For the common case that isn't true for (a plain mutable class), the generator fixes it at the
-source, for consumers whose compilation actually has the capability (net6+ - see below): every
-projection field is assigned in one explicit static constructor carrying
-`[DynamicDependency(DynamicallyAccessedMemberTypes.PublicProperties, typeof(Dest))]` for every
-destination type that actually needs one (an explicit instruction to the trimmer to keep those
-properties, not a hope that something else already references them) plus
-`[UnconditionalSuppressMessage("Trimming", "IL2026", ...)]` to silence the now-genuinely-guaranteed-safe
-warning - a file where every mapping happens to be constructor-covered emits neither attribute at
-all. This isn't just asserted: `samples/GeneratedMapper.Sample.Aot` is a small, EF-Core-free
-console app published with `PublishAot=true` and actually run, including calling `.Compile()` on a
-generated projection field directly (exactly what `IQueryable.Select()` does under the hood for an
-in-memory, non-EF-Core provider) and verifying the result — confirming both that expression-tree
-compilation works under full AOT and that the reflected property accessors survive trimming.
+**The one caveat:** the C# compiler itself, not GeneratedMapper, compiles an object-initializer
+inside an `Expression<Func<...>>` lambda (what `{Source}To{Destination}Projection` is) via
+`Expression.Bind(MethodInfo, Expression)`, which is `[RequiresUnreferencedCode]` and triggers an
+`IL2026` trim warning. This only applies when the destination actually needs an object-initializer
+— a destination whose constructor covers every mapped property (e.g. a positional record) compiles
+to a pure `Expression.New(ctor, args)` instead, with nothing to warn about at all. For destinations
+that do need it (the common case — a plain mutable class), the generator fixes this at the source:
+every such projection field is assigned in one explicit static constructor carrying
+`[DynamicDependency(DynamicallyAccessedMemberTypes.PublicProperties, typeof(Dest))]` (an explicit
+instruction to the trimmer to keep those properties, not a hope that something else already
+references them) plus `[UnconditionalSuppressMessage("Trimming", "IL2026", ...)]` to silence the
+now-verified-safe warning. Neither attribute is added at all when nothing in the file needs it.
 
-`UnconditionalSuppressMessageAttribute`/`DynamicDependencyAttribute`/`DynamicallyAccessedMemberTypes`
-don't exist below net6 — emitting them unconditionally would break compilation for any
-`netstandard2.0` consumer with even one SQL-projection mapping (verified directly, and covered by
-a dedicated regression test compiled against the real netstandard2.0 reference assembly). So, like
-`FrozenDictionary` and `#nullable`/`!` above, this is gated by asking the consumer's own
-`Compilation` whether the type resolves (`ConsumerCapabilities.CanSuppressTrimWarnings`) rather
-than assumed from a TFM name — a consumer without it just gets the same explicit-static-constructor
-structure with no attributes, since it can't run the trim/AOT analyzer to produce the warning in
-the first place.
+Both attributes are absent below net6 (netstandard2.0 included) — emitting them unconditionally
+would break compilation for exactly those consumers, so like `FrozenDictionary` and `#nullable`/`!`
+above, this is gated by asking the consumer's own `Compilation` whether the type resolves
+(`ConsumerCapabilities.CanSuppressTrimWarnings`), not assumed from a TFM name.
 
 ## Project layout
 

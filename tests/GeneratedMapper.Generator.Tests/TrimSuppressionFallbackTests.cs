@@ -6,17 +6,12 @@ using Microsoft.CodeAnalysis.CSharp;
 
 namespace GeneratedMapper.Generator.Tests;
 
-// System.Diagnostics.CodeAnalysis.UnconditionalSuppressMessageAttribute/DynamicDependencyAttribute/
-// DynamicallyAccessedMemberTypes only exist on net6+ - not netstandard2.0, not older net TFMs.
-// Emitting them unconditionally broke compilation for exactly those consumers (verified directly:
-// a netstandard2.0 project referencing them fails with CS0234). Unlike FrozenDictionary (its own
-// removable assembly), this attribute lives in System.Private.CoreLib itself, so
-// FrozenDictionaryFallbackTests' "strip one assembly from the net8.0 reference set" trick doesn't
-// work here - stripping CoreLib breaks everything, not just this one type. Instead, this
-// constructs a genuinely minimal netstandard2.0 compilation: just the real netstandard2.0 ref
-// assembly (from the locally installed NETStandard.Library.Ref pack) plus this repo's own
-// netstandard2.0 build of GeneratedMapper.Abstractions.dll - a reference-only compilation, which
-// is all Roslyn needs to determine compile errors (no runtime/implementation assemblies required).
+// The trim-suppression attributes only exist on net6+, not netstandard2.0 - emitting them
+// unconditionally broke compilation for those consumers (verified: CS0234). Unlike FrozenDictionary,
+// this attribute lives in System.Private.CoreLib itself, so FrozenDictionaryFallbackTests' "strip
+// one assembly" trick would break everything, not just this type. Instead, this builds a genuinely
+// minimal netstandard2.0 compilation from the real installed NETStandard.Library.Ref pack plus this
+// repo's own netstandard2.0 build of GeneratedMapper.Abstractions.dll.
 public sealed class TrimSuppressionFallbackTests
 {
     private const string Source = @"

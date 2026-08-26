@@ -43,12 +43,8 @@ internal static partial class MappingEmitter
         // way the ToXxx extension methods are by their `this TSource` parameter type.
         var fieldName = $"{mapping.Source.SimpleName}To{simpleName}Projection";
 
-        // No inline initializer - assigned instead in the one explicit static constructor Emit()
-        // writes after every projection field/method, so that constructor (and only it) can
-        // carry the [UnconditionalSuppressMessage] the C# compiler's own Expression.Bind calls
-        // trigger (IL2026) for a MemberInitExpression built inside an expression tree. An
-        // implicit field-initializer-only static constructor can't be attributed at all - see
-        // MappingEmitter.cs's own comment on this for the full reasoning.
+        // No inline initializer - assigned in Emit()'s shared explicit static constructor
+        // instead, since an implicit one can't carry the trim-suppression attributes it needs.
         sb.AppendLine($"    public static readonly Expression<Func<{source}, {destination}>> {fieldName};");
         sb.AppendLine();
 
@@ -133,12 +129,8 @@ internal static partial class MappingEmitter
 
         visiting.Remove(pairKey);
 
-        // Only a trailing `{ Prop = value, ... }` block (constructor-only shapes with nothing
-        // left over don't get one - see below) compiles to Expression.Bind calls; a pure
-        // Expression.New(constructor, args) doesn't reflect over any property setter at all, so
-        // this destination type doesn't need trim protection for this mapping. Tracked here
-        // (not just at the constructor-only exit point) since assignments is non-empty for the
-        // plain object-initializer shape too.
+        // A trailing `{ Prop = value }` block is what compiles to Expression.Bind calls; a pure
+        // Expression.New(ctor, args) with none left over doesn't, so needs no trim protection.
         if (assignments.Count > 0)
             destinationTypesUsingBind.Add(mapping.Destination.FullyQualifiedName);
 

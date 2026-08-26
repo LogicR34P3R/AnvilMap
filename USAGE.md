@@ -448,6 +448,14 @@ The generator reports build-time diagnostics instead of failing silently or thro
 GM001, GM004, and GM009 have one-click IDE code fixes available if you also reference
 `GeneratedMapper.CodeFixes`.
 
+## Native AOT
+
+Everything generated is plain C# with no runtime reflection, so it publishes and runs correctly
+under `dotnet publish -p:PublishAot=true` — verified via `samples/GeneratedMapper.Sample.Aot`, a
+small console app published and actually run under Native AOT. See README.md's "Native AOT"
+section for the one caveat (a trim warning tied to the SQL-projection feature specifically) and
+how the generator handles it.
+
 ## What it doesn't do
 
 Straightforward entity↔DTO shapes are the target use case. Not supported: dictionary mapping,

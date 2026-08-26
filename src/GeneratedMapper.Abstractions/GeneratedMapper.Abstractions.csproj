@@ -17,13 +17,8 @@
     <None Include="..\..\README.md" Pack="true" PackagePath="\" />
   </ItemGroup>
 
-  <!--
-    Opts into the trimmer/AOT analyzer's own build-time warnings - the cheapest way to catch a
-    real Native AOT problem before a consumer does. Only meaningful for a runtime-targeting TFM;
-    netstandard2.0 has no trimmer/AOT analyzer to run in the first place, so it's scoped to net8.0
-    rather than set unconditionally. See docs/roadmapv3.md F15 and README.md's AOT section for the
-    actual publish-and-run verification this enables.
-  -->
+  <!-- Opts into the trimmer/AOT analyzer's build-time warnings. netstandard2.0 has no such
+       analyzer to run, so this is scoped to net8.0 rather than set unconditionally. -->
   <PropertyGroup Condition="'$(TargetFramework)' == 'net8.0'">
     <IsAotCompatible>true</IsAotCompatible>
   </PropertyGroup>

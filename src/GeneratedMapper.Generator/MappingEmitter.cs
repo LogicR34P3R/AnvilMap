@@ -68,22 +68,15 @@ internal static partial class MappingEmitter
         foreach (var mapping in validMappings)
             EmitMapping(sb, mapping, capabilities, report);
 
-        // Each projection field is declared without an initializer above (see
-        // MappingEmitter.Projection.cs) and assigned here instead, in one explicit static
-        // constructor - an implicit, compiler-generated one (what a field initializer produces)
-        // can't carry an attribute. The explicit-constructor *structure* is plain, universally
-        // compatible C# emitted unconditionally; only the attributes below are gated, since only
-        // they need types absent from netstandard2.0/older net TFMs.
+        // Projection fields have no initializer (see MappingEmitter.Projection.cs) and are
+        // assigned below in one explicit static constructor instead, since an implicit one can't
+        // carry an attribute - needed for the [DynamicDependency]/[UnconditionalSuppressMessage]
+        // pair further down.
         var projectionFieldInitializers = new List<string>();
 
-        // Populated only for a destination type whose projection actually emitted a trailing
-        // `{ Prop = value, ... }` block somewhere (top-level or nested/enumerable) - a pure
-        // Expression.New(constructor, args), with no leftover object-initializer entries (e.g. a
-        // positional record with every property covered by its constructor), never calls
-        // Expression.Bind at all and needs no trim protection. Only these destinations get
-        // [DynamicDependency]/the file only gets [UnconditionalSuppressMessage] if this ends up
-        // non-empty - a file where every mapping's projection happens to be constructor-only
-        // stays completely unattributed.
+        // Destinations whose projection actually emits a trailing `{ Prop = value }` block (not
+        // a pure Expression.New(ctor, args), e.g. a fully constructor-covered record) - only
+        // those need Expression.Bind trim protection.
         var destinationTypesUsingBind = new HashSet<string>();
 
         foreach (var mapping in validMappings)
@@ -91,22 +84,17 @@ internal static partial class MappingEmitter
 
         if (projectionFieldInitializers.Count > 0)
         {
-            // The C# compiler itself calls Expression.Bind(MethodInfo, Expression) - annotated
-            // [RequiresUnreferencedCode] - to build a MemberInitExpression (`new Dest { ... }`)
-            // inside an expression tree; this is a property of *any* code compiling an
-            // object-initializer into an Expression<Func<...>>, not something particular to this
-            // generator, and it triggers IL2026 under trimming/Native AOT. Only attempted when
-            // the consumer's own compilation actually has these types (net6+) - see
-            // ConsumerCapabilities.CanSuppressTrimWarnings; a consumer without them can't run the
-            // trim/AOT analyzer in the first place, so there's nothing to suppress for them.
+            // The C# compiler compiles a `new Dest { Prop = value }` object-initializer inside an
+            // Expression<Func<...>> via Expression.Bind(MethodInfo, Expression), which is
+            // [RequiresUnreferencedCode] and triggers IL2026 under trimming/AOT - not something
+            // particular to this generator. Only attempted when the consumer's compilation has
+            // these types (net6+, see ConsumerCapabilities.CanSuppressTrimWarnings); older
+            // consumers can't run the trim/AOT analyzer anyway, so there's nothing to suppress.
             if (capabilities.CanSuppressTrimWarnings && destinationTypesUsingBind.Count > 0)
             {
-                // [DynamicDependency] is the actual guarantee - it explicitly tells the trimmer
-                // to keep every public property of each destination type reachable through some
-                // projection, rather than relying on the (currently true, but not permanently
-                // guaranteed) fact that the imperative methods/dispatcher below already reference
-                // the same properties. [UnconditionalSuppressMessage] only silences the warning;
-                // it doesn't keep anything alive on its own, hence needing both.
+                // DynamicDependency is the actual guarantee (keeps the property regardless of
+                // other reachability); UnconditionalSuppressMessage only silences the warning -
+                // neither makes the other redundant.
                 foreach (var destinationType in destinationTypesUsingBind)
                     sb.AppendLine($"    [System.Diagnostics.CodeAnalysis.DynamicDependency(System.Diagnostics.CodeAnalysis.DynamicallyAccessedMemberTypes.PublicProperties, typeof({destinationType}))]");
 

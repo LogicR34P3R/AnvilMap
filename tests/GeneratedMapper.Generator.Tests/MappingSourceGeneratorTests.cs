@@ -3020,10 +3020,8 @@ public sealed class UserDto
     public void Projection_FieldHasNoInlineInitializer_AssignedInSuppressedStaticConstructor()
     {
         // A field-initializer-only static constructor is implicit and can't carry an attribute -
-        // the projection field must be declared bare and assigned in an explicit static
-        // constructor instead, so [UnconditionalSuppressMessage] can be attached to it (the C#
-        // compiler's own Expression.Bind call, building this field's MemberInitExpression,
-        // triggers IL2026 under Native AOT/trimming - see docs/roadmapv3.md F15).
+        // the field must be declared bare and assigned in an explicit static constructor instead,
+        // so [UnconditionalSuppressMessage] can be attached to it.
         var result = GeneratorTestHelper.Run(@"
 using GeneratedMapper;
 

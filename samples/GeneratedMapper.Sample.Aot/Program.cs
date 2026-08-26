@@ -2,11 +2,9 @@ using GeneratedMapper;
 using GeneratedMapper.Sample.Aot.Models;
 using GeneratedMapper.Sample.Aot.ViewModels;
 
-// Native AOT verification target - see docs/roadmapv3.md F15 and README.md's AOT section. This
-// exercises direct/nested/enumerable mapping, [MapCondition], and [MapUsing] through both the
-// extension-method and IMapper paths, then asserts the results rather than just printing them -
-// the point is to catch a silently-wrong trim (something reflection-based quietly no-op'ing),
-// not just confirm the process exits 0.
+// Native AOT verification target - see README.md's "Native AOT" section. Exercises direct/
+// nested/enumerable mapping, [MapCondition], and [MapUsing], and asserts the results rather than
+// just printing them, to catch a silently-wrong trim rather than just a nonzero exit code.
 
 var external = new Order
 {
@@ -39,21 +37,14 @@ IMapper mapper = new GeneratedMapperService();
 Verify("IMapper", mapper.Map<Order, OrderDto>(external), external);
 Verify("IMapper", mapper.Map<Order, OrderDto>(internalOrder), internalOrder);
 
-// GeneratedMappings.OrderToOrderDtoProjection - the Expression<Func<Order, OrderDto>> behind
-// ProjectToOrderDto() - is what the IL2026 trim warning is actually about (the C# compiler uses
-// the [RequiresUnreferencedCode]-annotated Expression.Bind to build its MemberInitExpression).
-// EF Core never calls .Compile() on it - it walks the expression tree and translates it to SQL -
-// but calling .Compile() here is exactly what IQueryable.Select() does under the hood for an
-// in-memory (non-EF-Core) LINQ provider, so it's the most direct way to prove two things under
-// Native AOT specifically: that compiling an expression tree at runtime works at all (a bigger,
-// separate question from trimming - full AOT has no JIT, so this depends on the interpreter
-// fallback), and that the reflected property accessors Expression.Bind needed weren't trimmed
-// away despite the warning.
+// .Compile()-ing and invoking the projection field directly is exactly what IQueryable.Select()
+// does under the hood for an in-memory LINQ provider (EF Core itself never compiles it - it
+// walks the expression tree and translates to SQL) - the most direct way to prove, under real
+// Native AOT, both that expression-tree compilation works at all and that the property accessors
+// Expression.Bind reflects over (the IL2026 trim warning) weren't trimmed away.
 var compiled = GeneratedMappings.OrderToOrderDtoProjection.Compile();
-// [MapCondition] can't be translated into an expression tree (no method calls allowed), so the
-// projection leaves InternalNotes out entirely (GM005) rather than gating it - unlike the
-// imperative/IMapper paths above, it's always "" here regardless of IsInternal. Expected, not a
-// trimming artifact - checked separately below so this doesn't get confused with an actual bug.
+// [MapCondition] can't translate into an expression tree, so the projection leaves InternalNotes
+// out entirely (GM005) instead of gating it - always "" here, unlike the paths above.
 Verify("compiled projection", compiled(external), external, checkConditionedProperty: false);
 Verify("compiled projection", compiled(internalOrder), internalOrder, checkConditionedProperty: false);
 

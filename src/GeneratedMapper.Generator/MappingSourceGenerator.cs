@@ -104,10 +104,8 @@ public sealed class MappingSourceGenerator : IIncrementalGenerator
             // yet, this just makes the capability queryable.
             var useCSharp14 = languageVersion >= LanguageVersion.CSharp14;
 
-            // UnconditionalSuppressMessageAttribute/DynamicDependencyAttribute/
-            // DynamicallyAccessedMemberTypes shipped together as part of .NET 5/6's trimming
-            // annotations - not present on netstandard2.0 or older net TFMs. Same
-            // ask-the-Compilation approach as canUseFrozenDictionary above.
+            // The trimming-annotation attributes shipped with .NET 5/6, not netstandard2.0/older
+            // net TFMs. Same ask-the-Compilation approach as canUseFrozenDictionary above.
             var canSuppressTrimWarnings =
                 compilation.GetTypeByMetadataName("System.Diagnostics.CodeAnalysis.UnconditionalSuppressMessageAttribute") is not null;
 
