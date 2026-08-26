@@ -519,7 +519,7 @@ public sealed class UserDto
         var result = GeneratorTestHelper.Run(source);
         Assert.NotNull(result.Assembly);
 
-        var projectionField = GetMappingsType(result.Assembly!).GetField("ToUserDtoProjection")!;
+        var projectionField = GetMappingsType(result.Assembly!).GetField("UserToUserDtoProjection")!;
         var projectionExpression = (System.Linq.Expressions.LambdaExpression)projectionField.GetValue(null)!;
         var compiled = projectionExpression.Compile();
 
@@ -628,7 +628,7 @@ public sealed class UserDto
         var result = GeneratorTestHelper.Run(source);
         Assert.NotNull(result.Assembly);
 
-        var projectionField = GetMappingsType(result.Assembly!).GetField("ToUserDtoProjection")!;
+        var projectionField = GetMappingsType(result.Assembly!).GetField("UserToUserDtoProjection")!;
         var projectionExpression = (System.Linq.Expressions.LambdaExpression)projectionField.GetValue(null)!;
         var compiled = projectionExpression.Compile();
 
@@ -881,7 +881,7 @@ public sealed class UserDto
         var result = GeneratorTestHelper.Run(source);
         Assert.NotNull(result.Assembly);
 
-        var projectionField = GetMappingsType(result.Assembly!).GetField("ToUserDtoProjection")!;
+        var projectionField = GetMappingsType(result.Assembly!).GetField("UserToUserDtoProjection")!;
         var projectionExpression = (System.Linq.Expressions.LambdaExpression)projectionField.GetValue(null)!;
         var compiled = projectionExpression.Compile();
 

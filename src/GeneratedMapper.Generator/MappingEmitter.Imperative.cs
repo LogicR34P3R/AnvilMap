@@ -8,16 +8,25 @@ namespace GeneratedMapper.Generator;
 internal static partial class MappingEmitter
 {
     // Emits To{Dest}(source) / To{Dest}(source, destination). Four shapes:
-    //   1. Plain: sequential `destination.Prop = value;` assignments.
+    //   1. Plain: sequential `destination.Prop = value;` assignments. If any property is a
+    //      'required' member (C# 11), it's additionally (and redundantly) set inline in the
+    //      one-arg overload's `new Dest { ... }` - required is enforced on the object-creation
+    //      expression itself, so a bare `new Dest()` followed by a later assignment statement
+    //      still fails to compile (CS9035) even though the property does get a value.
     //   2. Self-recursive with MaxDepth: a private depth-counting overload guards a cyclic
     //      runtime graph against stack-overflowing.
-    //   3. Constructor-based (e.g. a positional record): required properties passed as
-    //      constructor arguments, any remainder via object-initializer/sequential assignment.
-    //      Checked first since ConstructorParameterProperties can be set independently of
-    //      whether any property happens to be init-only (see MappingResolver.TryMatchConstructor).
-    //   4. Init-only destination with a parameterless constructor: object-initializer syntax.
+    //   3. Constructor-based (e.g. a positional record): properties matched to a constructor
+    //      parameter passed as constructor arguments; any other init-only or required property
+    //      via object-initializer; the remainder via sequential assignment. Checked first since
+    //      ConstructorParameterProperties can be set independently of whether any property
+    //      happens to be init-only (see MappingResolver.TryMatchConstructor).
+    //   4. Init-only (or required) destination with a parameterless constructor:
+    //      object-initializer syntax for those, sequential assignment for the rest.
     //   Shapes 3 and 4 both omit the two-arg overload (GM008), since neither can assign into
-    //   an already-constructed instance.
+    //   an already-constructed instance - unlike shape 1, both are only reached when a true
+    //   init-only property forces single-method construction; a required-but-mutable property
+    //   alone stays on shape 1 and keeps its two-arg overload, since assigning into an
+    //   already-constructed instance is fine for required (only init-only is accessor-enforced).
     private static void EmitMapping(
         StringBuilder sb,
         MappingModel mapping,
@@ -40,9 +49,10 @@ internal static partial class MappingEmitter
         if (initOnlyProperties.Count == 0)
         {
             var isSelfRecursive = mapping.MaxDepth > 0 && mapping.Properties.Any(p => IsSelfRecursive(p, mapping));
+            var newDestinationExpression = BuildNewDestinationExpression(mapping, destination, useNullableReferenceTypes, report);
 
             sb.AppendLine($"    public static {destination} {methodName}(this {source} source)");
-            sb.AppendLine($"        => source.{methodName}(new {destination}());");
+            sb.AppendLine($"        => source.{methodName}({newDestinationExpression});");
             sb.AppendLine();
 
             if (!isSelfRecursive)
@@ -79,30 +89,11 @@ internal static partial class MappingEmitter
             mapping.Destination.DisplayName,
             methodName));
 
-        var initializerAssignments = new List<string>();
+        // Broadened to also pick up any required-but-mutable property alongside the init-only
+        // ones - both need to land in this same object-initializer (see the class-level note).
+        var initializerAssignments = BuildMustInitializeAssignments(mapping, mapping.Properties, exclude: null, useNullableReferenceTypes, report);
 
-        foreach (var property in initOnlyProperties)
-        {
-            if (property.ConditionMethodName is not null)
-            {
-                report?.Invoke(Diagnostic.Create(
-                    Diagnostics.ConditionOnInitOnlyPropertyUnsupported,
-                    Location.None,
-                    property.DestinationPropertyName,
-                    mapping.Source.DisplayName,
-                    mapping.Destination.DisplayName));
-                continue;
-            }
-
-            var value = BuildValueExpression(property, useNullableReferenceTypes);
-
-            if (value is null)
-                continue;
-
-            initializerAssignments.Add($"{property.DestinationPropertyName} = {value}");
-        }
-
-        var remainingProperties = mapping.Properties.Where(p => !p.DestinationIsInitOnly).ToList();
+        var remainingProperties = mapping.Properties.Where(p => !p.DestinationIsInitOnly && !p.DestinationIsRequired).ToList();
 
         sb.AppendLine($"    public static {destination} {methodName}(this {source} source)");
         sb.AppendLine("    {");
@@ -146,31 +137,12 @@ internal static partial class MappingEmitter
         var constructorArgs = constructorProperties
             .Select(name => BuildValueExpression(byName[name], useNullableReferenceTypes)!);
 
-        var initializerAssignments = new List<string>();
-
-        foreach (var property in mapping.Properties.Where(p => p.DestinationIsInitOnly && !constructorSet.Contains(p.DestinationPropertyName)))
-        {
-            if (property.ConditionMethodName is not null)
-            {
-                report?.Invoke(Diagnostic.Create(
-                    Diagnostics.ConditionOnInitOnlyPropertyUnsupported,
-                    Location.None,
-                    property.DestinationPropertyName,
-                    mapping.Source.DisplayName,
-                    mapping.Destination.DisplayName));
-                continue;
-            }
-
-            var value = BuildValueExpression(property, useNullableReferenceTypes);
-
-            if (value is null)
-                continue;
-
-            initializerAssignments.Add($"{property.DestinationPropertyName} = {value}");
-        }
+        // Broadened to also pick up any required-but-mutable property not already claimed by
+        // the constructor call, alongside the init-only ones (see the class-level note).
+        var initializerAssignments = BuildMustInitializeAssignments(mapping, mapping.Properties, constructorSet, useNullableReferenceTypes, report);
 
         var remainingProperties = mapping.Properties
-            .Where(p => !p.DestinationIsInitOnly && !constructorSet.Contains(p.DestinationPropertyName))
+            .Where(p => !p.DestinationIsInitOnly && !p.DestinationIsRequired && !constructorSet.Contains(p.DestinationPropertyName))
             .ToList();
 
         var constructorCall = $"new {destination}({string.Join(", ", constructorArgs)})";
@@ -185,6 +157,66 @@ internal static partial class MappingEmitter
         sb.AppendLine("        return destination;");
         sb.AppendLine("    }");
         sb.AppendLine();
+    }
+
+    // Shape 1's `new Dest()` call has no properties routed through TryMatchConstructor and no
+    // true init-only properties (both handled by other shapes already) - the only reason it
+    // would ever need an object-initializer instead of a bare parameterless call is a
+    // required-but-mutable property, which still has to be set within this same expression.
+    private static string BuildNewDestinationExpression(
+        MappingModel mapping, string destination, bool useNullableReferenceTypes, System.Action<Diagnostic>? report)
+    {
+        var assignments = BuildMustInitializeAssignments(mapping, mapping.Properties, exclude: null, useNullableReferenceTypes, report);
+
+        return assignments.Count > 0
+            ? $"new {destination} {{ {string.Join(", ", assignments)} }}"
+            : $"new {destination}()";
+    }
+
+    // Builds `Name = value` entries for every property that must be set within the same
+    // object-initializer/constructor-call expression that constructs the destination: true
+    // init-only properties (their accessor kind enforces it) and 'required' properties (C#
+    // enforces this on the object-creation expression itself, regardless of accessor kind - a
+    // later statement doesn't count, see the class-level note above). MappingResolver already
+    // guarantees a 'required' property here never has an active [MapCondition] (GM014); a
+    // non-required init-only property still might, and is reported (GM007) and left out of the
+    // initializer - safe for init-only (merely optional), which is why only that combination is
+    // still allowed to reach this point.
+    private static List<string> BuildMustInitializeAssignments(
+        MappingModel mapping,
+        IEnumerable<PropertyMappingModel> properties,
+        HashSet<string>? exclude,
+        bool useNullableReferenceTypes,
+        System.Action<Diagnostic>? report)
+    {
+        var assignments = new List<string>();
+
+        foreach (var property in properties)
+        {
+            if (!(property.DestinationIsInitOnly || property.DestinationIsRequired))
+                continue;
+
+            if (exclude is not null && exclude.Contains(property.DestinationPropertyName))
+                continue;
+
+            if (property.ConditionMethodName is not null)
+            {
+                report?.Invoke(Diagnostic.Create(
+                    Diagnostics.ConditionOnInitOnlyPropertyUnsupported,
+                    Location.None,
+                    property.DestinationPropertyName,
+                    mapping.Source.DisplayName,
+                    mapping.Destination.DisplayName));
+                continue;
+            }
+
+            var value = BuildValueExpression(property, useNullableReferenceTypes);
+
+            if (value is not null)
+                assignments.Add($"{property.DestinationPropertyName} = {value}");
+        }
+
+        return assignments;
     }
 
     // Depth guard and [MapCondition] guard are ANDed into one `if` when both apply - either

@@ -69,6 +69,12 @@ public sealed class MappingSourceGenerator : IIncrementalGenerator
             foreach (var declaration in allDeclarations)
                 graph.Add(declaration, spc.ReportDiagnostic);
 
+            // [MapIgnore] correctness checks that need every declaration targeting a given
+            // destination at once (a stale/typo'd source type, or a redundant combination) -
+            // run once per destination here, rather than once per declaration inside
+            // MappingResolver.Resolve, which would report the same finding multiple times.
+            MapIgnoreValidation.Validate(graph, spc.ReportDiagnostic);
+
             // Stage 3 - resolution: turn each raw declaration into a fully-matched MappingModel,
             // reporting a diagnostic for anything that couldn't be matched along the way.
             var models = graph.GetMappings()

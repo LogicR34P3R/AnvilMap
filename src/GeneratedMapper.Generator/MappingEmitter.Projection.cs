@@ -35,12 +35,18 @@ internal static partial class MappingEmitter
         var destination = mapping.Destination.FullyQualifiedName;
         var simpleName = mapping.Destination.SimpleName;
 
-        sb.AppendLine($"    public static readonly Expression<Func<{source}, {destination}>> To{simpleName}Projection =");
+        // Qualified by source *and* destination simple name - the destination's simple name
+        // alone collides whenever two different sources map into the same destination type
+        // (e.g. multiple [MapFrom] on one DTO), since a static field can't be overloaded the
+        // way the ToXxx extension methods are by their `this TSource` parameter type.
+        var fieldName = $"{mapping.Source.SimpleName}To{simpleName}Projection";
+
+        sb.AppendLine($"    public static readonly Expression<Func<{source}, {destination}>> {fieldName} =");
         sb.AppendLine($"        source => {body};");
         sb.AppendLine();
 
         sb.AppendLine($"    public static IQueryable<{destination}> ProjectTo{simpleName}(this IQueryable<{source}> source)");
-        sb.AppendLine($"        => source.Select(To{simpleName}Projection);");
+        sb.AppendLine($"        => source.Select({fieldName});");
         sb.AppendLine();
     }
 

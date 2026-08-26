@@ -109,7 +109,7 @@ every build):
 |---|---|---|
 | Imperative mapper | `Dest To{Dest}(this Source source)` | The common case — map one object to a new instance. |
 | Imperative mapper (populate) | `Dest To{Dest}(this Source source, Dest destination)` | Map into an object you already have (e.g. an EF Core entity you're updating). Omitted if `Dest` has `init`-only properties — see "Init-only and record destinations" below. |
-| Projection expression | `Expression<Func<Source, Dest>> To{Dest}Projection` | A real expression tree, built only from object initializers — no method calls — so it's translatable by any LINQ provider, including EF Core. |
+| Projection expression | `Expression<Func<Source, Dest>> {Source}To{Dest}Projection` | A real expression tree, built only from object initializers — no method calls — so it's translatable by any LINQ provider, including EF Core. Qualified by both the source and destination name, since a destination can have more than one source (multiple `[MapFrom]`). |
 | Projection extension | `IQueryable<Dest> ProjectTo{Dest}(this IQueryable<Source> source)` | `dbContext.Users.ProjectToUserDto()` — applies the expression above to a query. Only the columns you actually mapped are selected; nothing else comes back from the database. |
 | Generic dispatcher | `TDest Map<TDest>(object source)` / `Map<TSource,TDest>(TSource source)` / `Map<TSource,TDest>(TSource source, TDest destination)` | Type-erased mapping by runtime type, backed by a `FrozenDictionary` lookup — not a chain of `if`/`is` checks. Useful for generic infrastructure code that doesn't know the concrete types at compile time. |
 | DI service | `GeneratedMapperService : IMapper` | Wraps the dispatcher above behind an injectable interface. |
@@ -156,7 +156,7 @@ List<UserDto> dtos = await dbContext.Users
 ```
 
 Compose it with the rest of your LINQ query exactly like `.Select()` — because that's literally
-what it does under the hood (`source.Select(ToUserDtoProjection)`). Only the properties present
+what it does under the hood (`source.Select(UserToUserDtoProjection)`). Only the properties present
 on `UserDto` are ever selected from the database.
 
 ## Customizing a mapping
@@ -184,6 +184,32 @@ public sealed class UserDto
     public int ComputedOnly { get; set; }
 }
 ```
+
+With no argument, this excludes the property from every mapping into `UserDto`, regardless of
+source. Pass a source type to scope the exclusion to just that mapping instead — useful when the
+same destination has more than one source (multiple `[MapFrom]`) and the property should still
+be mapped normally from the others:
+
+```csharp
+[MapFrom(typeof(LegacyUser))]
+[MapFrom(typeof(User))]
+public sealed class UserDto
+{
+    // Left unmapped only when built from LegacyUser; still mapped from User.
+    [MapIgnore(typeof(LegacyUser))]
+    public string Email { get; set; } = "";
+}
+```
+
+`[MapIgnore]` is repeatable, so a property can be ignored for several specific sources by
+decorating it with one attribute per source type. It always wins over anything else configured
+for that property in the excluded mapping — a `[MapCondition]`, `[MapUsing]`, `[MapDefault]`, or
+`[MapProperty]` on an ignored property is dead code and reported as GM012.
+
+Two more checks catch likely mistakes: a `[MapIgnore(typeof(X))]` where `X` never actually maps
+into that destination — a typo, or stale after a rename — is reported as GM015 rather than
+silently doing nothing; and an unscoped `[MapIgnore]` alongside a scoped one, or the same source
+type named twice, is reported as GM016 (a tidiness nag, not a bug).
 
 **Gate a property on a runtime condition** (`[MapCondition]`) — a `static bool` method on the
 source type decides whether the property gets assigned:
@@ -412,6 +438,12 @@ The generator reports build-time diagnostics instead of failing silently or thro
 | GM009 | Error | `[MapUsing]` references a method that doesn't exist or has the wrong signature/return type. |
 | GM010 | Warning | A destination property's name matched more than one valid naming-convention-flattening path — left unmapped rather than guessed. Add `[MapProperty]` to disambiguate. |
 | GM011 | Warning | The same source/destination pair was declared more than once (`[MapTo]` and/or `[MapFrom]`, including a `GenerateReverse`-implied pair colliding with an explicit declaration). Only the last one encountered is used. |
+| GM012 | Warning | A `[MapCondition]`, `[MapUsing]`, `[MapDefault]`, or `[MapProperty]` targets a property that a `[MapIgnore]` already excludes from this same mapping, so the configuration is never consulted. Remove it, or scope the `[MapIgnore]` to a different source type. |
+| GM013 | Error | A `required` destination property has no resolved mapping and was left unset — the generated method will fail to compile (`CS9035`). Add a matching source property, a `[MapProperty]` override, a `[MapDefault]`, or remove `required`. |
+| GM014 | Warning | A `[MapCondition]` targets a `required` destination property, which isn't supported — a required member can't be conditionally left unset. Remove the `[MapCondition]`, or remove `required` (reported alongside `GM013`, since the property ends up unmapped either way). |
+| GM015 | Warning | A `[MapIgnore(typeof(X))]` names a type that's never actually a source for this destination — likely a typo, or left behind after a rename. It has no effect. |
+| GM016 | Info | A property has redundant `[MapIgnore]` attributes — an unscoped one alongside a scoped one, or the same source type named more than once. |
+| GM017 | Warning | The same destination property is targeted by more than one `[MapProperty]`, `[MapCondition]`, `[MapUsing]`, or `[MapDefault]` in this mapping — only the last one encountered is used. Remove all but one, or make sure they agree. |
 
 GM001, GM004, and GM009 have one-click IDE code fixes available if you also reference
 `GeneratedMapper.CodeFixes`.

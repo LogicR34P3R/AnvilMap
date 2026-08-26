@@ -93,4 +93,52 @@ internal static class Diagnostics
         category: "GeneratedMapper",
         defaultSeverity: DiagnosticSeverity.Warning,
         isEnabledByDefault: true);
+
+    public static readonly DiagnosticDescriptor AttributeOnIgnoredProperty = new(
+        id: "GM012",
+        title: "An attribute override targets a property excluded by [MapIgnore]",
+        messageFormat: "Property '{0}' on '{1}' -> '{2}' has {3} configured, but a [MapIgnore] already excludes it from this mapping, so the configuration is never consulted and the property is always left at its default value here. Remove it, or scope the [MapIgnore] to a different source type.",
+        category: "GeneratedMapper",
+        defaultSeverity: DiagnosticSeverity.Warning,
+        isEnabledByDefault: true);
+
+    public static readonly DiagnosticDescriptor RequiredPropertyUnmapped = new(
+        id: "GM013",
+        title: "Required destination property has no resolved mapping",
+        messageFormat: "Property '{0}' on '{1}' -> '{2}' is declared 'required' but has no resolved mapping and was left unset. The generated mapping method will fail to compile (CS9035, 'required member must be set'). Add a matching source property, a [MapProperty] override, a [MapDefault], or remove the 'required' modifier.",
+        category: "GeneratedMapper",
+        defaultSeverity: DiagnosticSeverity.Error,
+        isEnabledByDefault: true);
+
+    public static readonly DiagnosticDescriptor ConditionOnRequiredPropertyUnsupported = new(
+        id: "GM014",
+        title: "[MapCondition] on a required destination property is not supported",
+        messageFormat: "Property '{0}' on '{1}' -> '{2}' combines [MapCondition] with a 'required' destination property, which isn't supported - a required member has to be set unconditionally wherever the destination is constructed, so it can't also be left unmapped based on a runtime check. The property was left out of the generated mapping (see GM013). Remove the [MapCondition], or remove 'required' from the property.",
+        category: "GeneratedMapper",
+        defaultSeverity: DiagnosticSeverity.Warning,
+        isEnabledByDefault: true);
+
+    public static readonly DiagnosticDescriptor MapIgnoreSourceTypeNeverMapped = new(
+        id: "GM015",
+        title: "[MapIgnore] source type doesn't match any declared mapping",
+        messageFormat: "The [MapIgnore(typeof({0}))] on '{1}.{2}' doesn't match any declared mapping into '{1}' - '{0}' is never actually a source for this destination, so this [MapIgnore] has no effect. Check for a typo, or remove it if it's stale.",
+        category: "GeneratedMapper",
+        defaultSeverity: DiagnosticSeverity.Warning,
+        isEnabledByDefault: true);
+
+    public static readonly DiagnosticDescriptor RedundantMapIgnore = new(
+        id: "GM016",
+        title: "Redundant [MapIgnore] attributes",
+        messageFormat: "Property '{0}' on '{1}' has redundant [MapIgnore] attributes - {2}",
+        category: "GeneratedMapper",
+        defaultSeverity: DiagnosticSeverity.Info,
+        isEnabledByDefault: true);
+
+    public static readonly DiagnosticDescriptor DuplicatePropertyAttribute = new(
+        id: "GM017",
+        title: "Duplicate property-level attribute declaration",
+        messageFormat: "The destination property '{0}' on '{1}' is targeted by {2} more than once in this mapping - only the last one encountered is used. Remove all but one, or make sure they agree.",
+        category: "GeneratedMapper",
+        defaultSeverity: DiagnosticSeverity.Warning,
+        isEnabledByDefault: true);
 }
