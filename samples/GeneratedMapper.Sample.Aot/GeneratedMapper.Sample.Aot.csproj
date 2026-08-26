@@ -1,0 +1,28 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    A deliberately small, EF-Core-free sample: GeneratedMapper.Sample already demonstrates the
+    full feature set, but pulls in EF Core/Sqlite, which has its own separate (and much larger)
+    Native AOT story that would muddy a signal specifically about GeneratedMapper.Abstractions/
+    GeneratedMapper.Generator's own AOT-friendliness. This project exists only to be published
+    with PublishAot=true and run, proving the "no reflection at runtime" pitch rather than
+    asserting it - see docs/roadmapv3.md F15 and README.md's AOT section for how to run the
+    verification and what it found.
+  -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net8.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <InvariantGlobalization>true</InvariantGlobalization>
+    <PublishAot>true</PublishAot>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\GeneratedMapper.Abstractions\GeneratedMapper.Abstractions.csproj" />
+    <ProjectReference Include="..\..\src\GeneratedMapper.Generator\GeneratedMapper.Generator.csproj"
+                      OutputItemType="Analyzer"
+                      ReferenceOutputAssembly="false" />
+  </ItemGroup>
+
+</Project>

@@ -14,12 +14,14 @@ internal static partial class MappingEmitter
         StringBuilder sb,
         MappingModel mapping,
         Dictionary<(string Source, string Destination), MappingModel> byPair,
+        List<string> projectionFieldInitializers,
+        HashSet<string> destinationTypesUsingBind,
         System.Action<Diagnostic>? report)
     {
         // `visiting` guards against infinite recursion on a cyclic mapping graph; hitting an
         // already-visiting pair aborts the whole projection (GM002) rather than truncating it.
         var visiting = new HashSet<(string, string)>();
-        var body = BuildProjectionInitializer(mapping, byPair, "source", visiting, report);
+        var body = BuildProjectionInitializer(mapping, byPair, "source", visiting, destinationTypesUsingBind, report);
 
         if (body is null)
         {
@@ -41,13 +43,20 @@ internal static partial class MappingEmitter
         // way the ToXxx extension methods are by their `this TSource` parameter type.
         var fieldName = $"{mapping.Source.SimpleName}To{simpleName}Projection";
 
-        sb.AppendLine($"    public static readonly Expression<Func<{source}, {destination}>> {fieldName} =");
-        sb.AppendLine($"        source => {body};");
+        // No inline initializer - assigned instead in the one explicit static constructor Emit()
+        // writes after every projection field/method, so that constructor (and only it) can
+        // carry the [UnconditionalSuppressMessage] the C# compiler's own Expression.Bind calls
+        // trigger (IL2026) for a MemberInitExpression built inside an expression tree. An
+        // implicit field-initializer-only static constructor can't be attributed at all - see
+        // MappingEmitter.cs's own comment on this for the full reasoning.
+        sb.AppendLine($"    public static readonly Expression<Func<{source}, {destination}>> {fieldName};");
         sb.AppendLine();
 
         sb.AppendLine($"    public static IQueryable<{destination}> ProjectTo{simpleName}(this IQueryable<{source}> source)");
         sb.AppendLine($"        => source.Select({fieldName});");
         sb.AppendLine();
+
+        projectionFieldInitializers.Add($"        {fieldName} = source => {body};");
     }
 
     private static string? BuildProjectionInitializer(
@@ -55,6 +64,7 @@ internal static partial class MappingEmitter
         Dictionary<(string Source, string Destination), MappingModel> byPair,
         string sourceExpr,
         HashSet<(string, string)> visiting,
+        HashSet<string> destinationTypesUsingBind,
         System.Action<Diagnostic>? report)
     {
         var pairKey = (mapping.Source.FullyQualifiedName, mapping.Destination.FullyQualifiedName);
@@ -93,10 +103,10 @@ internal static partial class MappingEmitter
                     $"{sourceExpr}.{property.SourcePropertyName}",
 
                 PropertyMappingKind.Nested =>
-                    BuildNestedProjection(property, byPair, $"{sourceExpr}.{property.SourcePropertyName}", visiting, report),
+                    BuildNestedProjection(property, byPair, $"{sourceExpr}.{property.SourcePropertyName}", visiting, destinationTypesUsingBind, report),
 
                 PropertyMappingKind.Enumerable =>
-                    BuildEnumerableProjection(property, byPair, sourceExpr, visiting, report),
+                    BuildEnumerableProjection(property, byPair, sourceExpr, visiting, destinationTypesUsingBind, report),
 
                 PropertyMappingKind.Converted =>
                     $"{property.MethodHostType!.FullyQualifiedName}.{property.ConverterMethodName}({sourceExpr})",
@@ -123,6 +133,15 @@ internal static partial class MappingEmitter
 
         visiting.Remove(pairKey);
 
+        // Only a trailing `{ Prop = value, ... }` block (constructor-only shapes with nothing
+        // left over don't get one - see below) compiles to Expression.Bind calls; a pure
+        // Expression.New(constructor, args) doesn't reflect over any property setter at all, so
+        // this destination type doesn't need trim protection for this mapping. Tracked here
+        // (not just at the constructor-only exit point) since assignments is non-empty for the
+        // plain object-initializer shape too.
+        if (assignments.Count > 0)
+            destinationTypesUsingBind.Add(mapping.Destination.FullyQualifiedName);
+
         if (constructorSet is null)
             return $"new {mapping.Destination.FullyQualifiedName} {{ {string.Join(", ", assignments)} }}";
 
@@ -139,12 +158,13 @@ internal static partial class MappingEmitter
         Dictionary<(string Source, string Destination), MappingModel> byPair,
         string sourceExpr,
         HashSet<(string, string)> visiting,
+        HashSet<string> destinationTypesUsingBind,
         System.Action<Diagnostic>? report)
     {
         if (!byPair.TryGetValue((property.SourceType.FullyQualifiedName, property.DestinationType.FullyQualifiedName), out var nested))
             return null;
 
-        return BuildProjectionInitializer(nested, byPair, sourceExpr, visiting, report);
+        return BuildProjectionInitializer(nested, byPair, sourceExpr, visiting, destinationTypesUsingBind, report);
     }
 
     private static string? BuildEnumerableProjection(
@@ -152,6 +172,7 @@ internal static partial class MappingEmitter
         Dictionary<(string Source, string Destination), MappingModel> byPair,
         string outerSourceExpr,
         HashSet<(string, string)> visiting,
+        HashSet<string> destinationTypesUsingBind,
         System.Action<Diagnostic>? report)
     {
         if (property.ElementSourceType is null || property.ElementDestinationType is null)
@@ -170,7 +191,7 @@ internal static partial class MappingEmitter
                 out var elementMapping))
             return null;
 
-        var elementInitializer = BuildProjectionInitializer(elementMapping, byPair, "x", visiting, report);
+        var elementInitializer = BuildProjectionInitializer(elementMapping, byPair, "x", visiting, destinationTypesUsingBind, report);
 
         if (elementInitializer is null)
             return null;
