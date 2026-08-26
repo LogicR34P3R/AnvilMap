@@ -202,18 +202,21 @@ published with `PublishAot=true` and run — including calling `.Compile()` on a
 projection field directly, exactly what `IQueryable.Select()` does under the hood for an in-memory
 provider — to confirm this rather than just assert it.
 
-**The one caveat:** the C# compiler itself, not GeneratedMapper, compiles an object-initializer
-inside an `Expression<Func<...>>` lambda (what `{Source}To{Destination}Projection` is) via
-`Expression.Bind(MethodInfo, Expression)`, which is `[RequiresUnreferencedCode]` and triggers an
-`IL2026` trim warning. This only applies when the destination actually needs an object-initializer
-— a destination whose constructor covers every mapped property (e.g. a positional record) compiles
-to a pure `Expression.New(ctor, args)` instead, with nothing to warn about at all. For destinations
-that do need it (the common case — a plain mutable class), the generator fixes this at the source:
-every such projection field is assigned in one explicit static constructor carrying
-`[DynamicDependency(DynamicallyAccessedMemberTypes.PublicProperties, typeof(Dest))]` (an explicit
-instruction to the trimmer to keep those properties, not a hope that something else already
-references them) plus `[UnconditionalSuppressMessage("Trimming", "IL2026", ...)]` to silence the
-now-verified-safe warning. Neither attribute is added at all when nothing in the file needs it.
+**One caveat:** building `{Source}To{Destination}Projection` means compiling an object-initializer
+inside an `Expression<Func<...>>`, and the C# compiler does that by calling
+`Expression.Bind(MethodInfo, Expression)` under the hood. That method is marked
+`[RequiresUnreferencedCode]`, so it trips an `IL2026` trim warning — not a GeneratedMapper bug,
+just what happens whenever you build a member-init expression tree. It only comes up for
+destinations that actually need an object-initializer, though: if the destination's constructor
+already covers every mapped property (a positional record, say), the projection compiles to a
+plain `Expression.New(ctor, args)` and there's nothing to warn about.
+
+For the destinations where it does come up (plain mutable classes, the usual case), the generator
+handles it for you: each projection field gets assigned inside an explicit static constructor
+tagged with `[DynamicDependency(DynamicallyAccessedMemberTypes.PublicProperties, typeof(Dest))]` —
+telling the trimmer directly to keep those properties instead of hoping nothing else strips
+them — plus `[UnconditionalSuppressMessage("Trimming", "IL2026", ...)]` to clear the now-safe
+warning. If nothing in your mapping actually needs this, neither attribute shows up.
 
 Both attributes are absent below net6 (netstandard2.0 included) — emitting them unconditionally
 would break compilation for exactly those consumers, so like `FrozenDictionary` and `#nullable`/`!`
