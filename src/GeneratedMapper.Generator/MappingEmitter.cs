@@ -68,8 +68,46 @@ internal static partial class MappingEmitter
         foreach (var mapping in validMappings)
             EmitMapping(sb, mapping, capabilities, report);
 
+        // Projection fields have no initializer (see MappingEmitter.Projection.cs) and are
+        // assigned below in one explicit static constructor instead, since an implicit one can't
+        // carry an attribute - needed for the [DynamicDependency]/[UnconditionalSuppressMessage]
+        // pair further down.
+        var projectionFieldInitializers = new List<string>();
+
+        // Destinations whose projection actually emits a trailing `{ Prop = value }` block (not
+        // a pure Expression.New(ctor, args), e.g. a fully constructor-covered record) - only
+        // those need Expression.Bind trim protection.
+        var destinationTypesUsingBind = new HashSet<string>();
+
         foreach (var mapping in validMappings)
-            EmitProjection(sb, mapping, byPair, report);
+            EmitProjection(sb, mapping, byPair, projectionFieldInitializers, destinationTypesUsingBind, report);
+
+        if (projectionFieldInitializers.Count > 0)
+        {
+            // The C# compiler compiles a `new Dest { Prop = value }` object-initializer inside an
+            // Expression<Func<...>> via Expression.Bind(MethodInfo, Expression), which is
+            // [RequiresUnreferencedCode] and triggers IL2026 under trimming/AOT - not something
+            // particular to this generator. Only attempted when the consumer's compilation has
+            // these types (net6+, see ConsumerCapabilities.CanSuppressTrimWarnings); older
+            // consumers can't run the trim/AOT analyzer anyway, so there's nothing to suppress.
+            if (capabilities.CanSuppressTrimWarnings && destinationTypesUsingBind.Count > 0)
+            {
+                // DynamicDependency is the actual guarantee (keeps the property regardless of
+                // other reachability); UnconditionalSuppressMessage only silences the warning -
+                // neither makes the other redundant.
+                foreach (var destinationType in destinationTypesUsingBind)
+                    sb.AppendLine($"    [System.Diagnostics.CodeAnalysis.DynamicDependency(System.Diagnostics.CodeAnalysis.DynamicallyAccessedMemberTypes.PublicProperties, typeof({destinationType}))]");
+
+                sb.AppendLine("    [System.Diagnostics.CodeAnalysis.UnconditionalSuppressMessage(\"Trimming\", \"IL2026\", Justification = \"The [DynamicDependency] attributes above already guarantee every destination property Expression.Bind reflects over here is kept.\")]");
+            }
+
+            sb.AppendLine("    static GeneratedMappings()");
+            sb.AppendLine("    {");
+            foreach (var initializer in projectionFieldInitializers)
+                sb.AppendLine(initializer);
+            sb.AppendLine("    }");
+            sb.AppendLine();
+        }
 
         EmitGenericDispatcher(sb, validMappings, capabilities);
 

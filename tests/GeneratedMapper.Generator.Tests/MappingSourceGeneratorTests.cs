@@ -3016,6 +3016,87 @@ public sealed class UserDto
         AssertNoCompileErrors(result);
     }
 
+    [Fact]
+    public void Projection_FieldHasNoInlineInitializer_AssignedInSuppressedStaticConstructor()
+    {
+        // A field-initializer-only static constructor is implicit and can't carry an attribute -
+        // the field must be declared bare and assigned in an explicit static constructor instead,
+        // so [UnconditionalSuppressMessage] can be attached to it.
+        var result = GeneratorTestHelper.Run(@"
+using GeneratedMapper;
+
+namespace Sample;
+
+[MapTo(typeof(UserDto))]
+public sealed class User
+{
+    public int Id { get; set; }
+}
+
+public sealed class UserDto
+{
+    public int Id { get; set; }
+}
+");
+
+        Assert.NotNull(result.GeneratedSource);
+        var source = result.GeneratedSource!;
+
+        Assert.Contains(
+            "public static readonly Expression<Func<global::Sample.User, global::Sample.UserDto>> UserToUserDtoProjection;",
+            source);
+        Assert.Contains(
+            "[System.Diagnostics.CodeAnalysis.UnconditionalSuppressMessage(\"Trimming\", \"IL2026\"",
+            source);
+        Assert.Contains("static GeneratedMappings()", source);
+        Assert.Contains(
+            "UserToUserDtoProjection = source => new global::Sample.UserDto { Id = source.Id };",
+            source);
+        AssertNoCompileErrors(result);
+    }
+
+    [Fact]
+    public void Projection_MultipleMappings_AllAssignedInOneSharedStaticConstructor()
+    {
+        // Every mapping's projection field assignment must land in the same single explicit
+        // static constructor, not one per mapping - a type can only have one static constructor.
+        var result = GeneratorTestHelper.Run(@"
+using GeneratedMapper;
+
+namespace Sample;
+
+[MapTo(typeof(UserDto))]
+public sealed class User
+{
+    public int Id { get; set; }
+}
+
+[MapTo(typeof(PostDto))]
+public sealed class Post
+{
+    public int Id { get; set; }
+}
+
+public sealed class UserDto
+{
+    public int Id { get; set; }
+}
+
+public sealed class PostDto
+{
+    public int Id { get; set; }
+}
+");
+
+        Assert.NotNull(result.GeneratedSource);
+        var source = result.GeneratedSource!;
+
+        Assert.Single(Regex.Matches(source, "static GeneratedMappings\\(\\)"));
+        Assert.Contains("UserToUserDtoProjection = source => new global::Sample.UserDto { Id = source.Id };", source);
+        Assert.Contains("PostToPostDtoProjection = source => new global::Sample.PostDto { Id = source.Id };", source);
+        AssertNoCompileErrors(result);
+    }
+
     private static void AssertNoCompileErrors(GeneratorTestResult result)
     {
         var errors = result.CompilationDiagnostics

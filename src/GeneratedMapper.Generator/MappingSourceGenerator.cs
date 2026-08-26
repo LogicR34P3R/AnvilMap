@@ -104,7 +104,12 @@ public sealed class MappingSourceGenerator : IIncrementalGenerator
             // yet, this just makes the capability queryable.
             var useCSharp14 = languageVersion >= LanguageVersion.CSharp14;
 
-            var capabilities = new ConsumerCapabilities(canUseFrozenDictionary, useNullableReferenceTypes, useCSharp14);
+            // The trimming-annotation attributes shipped with .NET 5/6, not netstandard2.0/older
+            // net TFMs. Same ask-the-Compilation approach as canUseFrozenDictionary above.
+            var canSuppressTrimWarnings =
+                compilation.GetTypeByMetadataName("System.Diagnostics.CodeAnalysis.UnconditionalSuppressMessageAttribute") is not null;
+
+            var capabilities = new ConsumerCapabilities(canUseFrozenDictionary, useNullableReferenceTypes, useCSharp14, canSuppressTrimWarnings);
 
             // Stage 4 - emission: one generated file for the whole compilation.
             var source = MappingEmitter.Emit(models, capabilities, spc.ReportDiagnostic);

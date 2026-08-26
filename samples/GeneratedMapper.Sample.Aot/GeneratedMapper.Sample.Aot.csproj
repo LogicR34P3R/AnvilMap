@@ -1,0 +1,22 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- Deliberately EF-Core-free (unlike GeneratedMapper.Sample), so PublishAot verifies this
+       generator's own AOT-friendliness without EF Core's separate AOT story muddying the signal.
+       See README.md's "Native AOT" section. -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net8.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <InvariantGlobalization>true</InvariantGlobalization>
+    <PublishAot>true</PublishAot>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\GeneratedMapper.Abstractions\GeneratedMapper.Abstractions.csproj" />
+    <ProjectReference Include="..\..\src\GeneratedMapper.Generator\GeneratedMapper.Generator.csproj"
+                      OutputItemType="Analyzer"
+                      ReferenceOutputAssembly="false" />
+  </ItemGroup>
+
+</Project>

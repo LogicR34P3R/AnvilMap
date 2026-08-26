@@ -8,4 +8,7 @@ namespace GeneratedMapper.Generator;
 internal sealed record ConsumerCapabilities(
     bool CanUseFrozenDictionary,
     bool UseNullableReferenceTypes,
-    bool UseCSharp14);
+    bool UseCSharp14,
+    // The trimming-annotation attributes (UnconditionalSuppressMessage/DynamicDependency/
+    // DynamicallyAccessedMemberTypes), absent on netstandard2.0/older net TFMs.
+    bool CanSuppressTrimWarnings);
