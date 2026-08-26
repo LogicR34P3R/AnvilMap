@@ -18,6 +18,7 @@ internal sealed record PropertyMappingModel(
     string? ConditionMethodName = null,
     bool ConditionAcceptsDestination = false,
     bool DestinationIsInitOnly = false,
+    bool DestinationIsRequired = false,
     CollectionShape DestinationCollectionShape = CollectionShape.List,
     string? ConverterMethodName = null,
     string? DefaultValueLiteral = null,

@@ -222,7 +222,7 @@ public sealed class BasketDto
 ");
 
         Assert.NotNull(result.GeneratedSource);
-        Assert.Contains("Expression<Func<global::Sample.Basket, global::Sample.BasketDto>> ToBasketDtoProjection", result.GeneratedSource);
+        Assert.Contains("Expression<Func<global::Sample.Basket, global::Sample.BasketDto>> BasketToBasketDtoProjection", result.GeneratedSource);
         Assert.Contains("Items = source.Items.Select(x => new global::Sample.ItemDto { Id = x.Id }).ToList()", result.GeneratedSource);
         Assert.Contains("ProjectToBasketDto(this IQueryable<global::Sample.Basket> source)", result.GeneratedSource);
         AssertNoCompileErrors(result);
@@ -697,7 +697,7 @@ public sealed record UserDto
 ");
 
         Assert.NotNull(result.GeneratedSource);
-        Assert.Contains("Expression<Func<global::Sample.User, global::Sample.UserDto>> ToUserDtoProjection", result.GeneratedSource);
+        Assert.Contains("Expression<Func<global::Sample.User, global::Sample.UserDto>> UserToUserDtoProjection", result.GeneratedSource);
         Assert.Contains("source => new global::Sample.UserDto { Id = source.Id };", result.GeneratedSource);
         AssertNoCompileErrors(result);
     }
@@ -1512,7 +1512,7 @@ public sealed class UserDto
     }
 
     [Fact]
-    public void MapDefault_DuplicateOnSameProperty_DoesNotCrashTheGenerator_LastWins()
+    public void MapDefault_DuplicateOnSameProperty_ReportsGM017AndDoesNotCrashTheGenerator_LastWins()
     {
         var result = GeneratorTestHelper.Run(@"
 using GeneratedMapper;
@@ -1536,11 +1536,17 @@ public sealed class UserDto
         Assert.NotNull(result.GeneratedSource);
         Assert.DoesNotContain(result.GeneratorDiagnostics, d => d.Id == "CS8785");
         Assert.Contains("destination.Name = source.Name ?? \"Second\";", result.GeneratedSource);
+
+        var gm017 = Assert.Single(result.GeneratorDiagnostics.Where(d => d.Id == "GM017"));
+        Assert.Equal(DiagnosticSeverity.Warning, gm017.Severity);
+        var message = gm017.GetMessage();
+        Assert.Contains("Name", message);
+        Assert.Contains("[MapDefault]", message);
         AssertNoCompileErrors(result);
     }
 
     [Fact]
-    public void MapCondition_DuplicateOnSameProperty_DoesNotCrashTheGenerator_LastWins()
+    public void MapCondition_DuplicateOnSameProperty_ReportsGM017AndDoesNotCrashTheGenerator_LastWins()
     {
         var result = GeneratorTestHelper.Run(@"
 using GeneratedMapper;
@@ -1568,6 +1574,117 @@ public sealed class UserDto
         Assert.DoesNotContain(result.GeneratorDiagnostics, d => d.Id == "CS8785");
         Assert.Contains("global::Sample.User.Second(source)", result.GeneratedSource);
         Assert.DoesNotContain("global::Sample.User.First(source)", result.GeneratedSource);
+
+        var gm017 = Assert.Single(result.GeneratorDiagnostics.Where(d => d.Id == "GM017"));
+        Assert.Equal(DiagnosticSeverity.Warning, gm017.Severity);
+        var message = gm017.GetMessage();
+        Assert.Contains("Name", message);
+        Assert.Contains("[MapCondition]", message);
+        AssertNoCompileErrors(result);
+    }
+
+    [Fact]
+    public void MapProperty_DuplicateOnSameProperty_ReportsGM017_LastWins()
+    {
+        var result = GeneratorTestHelper.Run(@"
+using GeneratedMapper;
+
+namespace Sample;
+
+[MapTo(typeof(UserDto))]
+[MapProperty(typeof(UserDto), nameof(FirstEmail), nameof(UserDto.EmailAddress))]
+[MapProperty(typeof(UserDto), nameof(SecondEmail), nameof(UserDto.EmailAddress))]
+public sealed class User
+{
+    public string FirstEmail { get; set; } = """";
+    public string SecondEmail { get; set; } = """";
+}
+
+public sealed class UserDto
+{
+    public string EmailAddress { get; set; } = """";
+}
+");
+
+        Assert.NotNull(result.GeneratedSource);
+        Assert.Contains("destination.EmailAddress = source.SecondEmail;", result.GeneratedSource);
+
+        var gm017 = Assert.Single(result.GeneratorDiagnostics.Where(d => d.Id == "GM017"));
+        Assert.Equal(DiagnosticSeverity.Warning, gm017.Severity);
+        var message = gm017.GetMessage();
+        Assert.Contains("EmailAddress", message);
+        Assert.Contains("[MapProperty]", message);
+        AssertNoCompileErrors(result);
+    }
+
+    [Fact]
+    public void MapUsing_DuplicateOnSameProperty_ReportsGM017_LastWins()
+    {
+        var result = GeneratorTestHelper.Run(@"
+using GeneratedMapper;
+
+namespace Sample;
+
+[MapTo(typeof(UserDto))]
+[MapUsing(typeof(UserDto), nameof(UserDto.FullName), nameof(First))]
+[MapUsing(typeof(UserDto), nameof(UserDto.FullName), nameof(Second))]
+public sealed class User
+{
+    public string Name { get; set; } = """";
+
+    public static string First(User source) => ""first"";
+    public static string Second(User source) => ""second"";
+}
+
+public sealed class UserDto
+{
+    public string FullName { get; set; } = """";
+}
+");
+
+        Assert.NotNull(result.GeneratedSource);
+        Assert.Contains("global::Sample.User.Second(source)", result.GeneratedSource);
+        Assert.DoesNotContain("global::Sample.User.First(source)", result.GeneratedSource);
+
+        var gm017 = Assert.Single(result.GeneratorDiagnostics.Where(d => d.Id == "GM017"));
+        Assert.Equal(DiagnosticSeverity.Warning, gm017.Severity);
+        var message = gm017.GetMessage();
+        Assert.Contains("FullName", message);
+        Assert.Contains("[MapUsing]", message);
+        AssertNoCompileErrors(result);
+    }
+
+    [Fact]
+    public void MapCondition_OnTwoDifferentProperties_DoesNotReportGM017()
+    {
+        // Two [MapCondition] attributes in the same mapping, but naming two different
+        // destination properties - not a duplicate, no ambiguity to flag.
+        var result = GeneratorTestHelper.Run(@"
+using GeneratedMapper;
+
+namespace Sample;
+
+[MapTo(typeof(UserDto))]
+[MapCondition(typeof(UserDto), nameof(UserDto.FirstName), nameof(ShouldMapFirst))]
+[MapCondition(typeof(UserDto), nameof(UserDto.LastName), nameof(ShouldMapLast))]
+public sealed class User
+{
+    public string FirstName { get; set; } = """";
+    public string LastName { get; set; } = """";
+
+    public static bool ShouldMapFirst(User source) => true;
+    public static bool ShouldMapLast(User source) => true;
+}
+
+public sealed class UserDto
+{
+    public string FirstName { get; set; } = """";
+    public string LastName { get; set; } = """";
+}
+");
+
+        Assert.NotNull(result.GeneratedSource);
+        Assert.DoesNotContain(result.GeneratorDiagnostics, d => d.Id == "GM017");
         AssertNoCompileErrors(result);
     }
 
@@ -2353,6 +2470,549 @@ public sealed class UserDto
         Assert.Contains("destination.FullName = global::Sample.UserDto.ComputeFullName(source);", result.GeneratedSource);
         Assert.Contains(result.GeneratorDiagnostics, d => d.Id == "GM009" && d.Severity == DiagnosticSeverity.Error);
         Assert.DoesNotContain("destination.FirstName", result.GeneratedSource);
+        AssertNoCompileErrors(result);
+    }
+
+    [Fact]
+    public void MapIgnore_ScopedToSourceType_ExcludesOnlyThatSourceLeavesOthersMapped()
+    {
+        // [MapIgnore(typeof(UserV1))] only excludes Extra from the UserV1 -> UserDto mapping;
+        // the UserV2 -> UserDto mapping (declared via a second, repeatable [MapFrom]) still
+        // maps it normally, in both the imperative methods and the SQL projection.
+        var result = GeneratorTestHelper.Run(@"
+using GeneratedMapper;
+
+namespace Sample;
+
+public sealed class UserV1
+{
+    public int Id { get; set; }
+    public string Extra { get; set; } = """";
+}
+
+public sealed class UserV2
+{
+    public int Id { get; set; }
+    public string Extra { get; set; } = """";
+}
+
+[MapFrom(typeof(UserV1))]
+[MapFrom(typeof(UserV2))]
+public sealed class UserDto
+{
+    public int Id { get; set; }
+
+    [MapIgnore(typeof(UserV1))]
+    public string Extra { get; set; } = """";
+}
+");
+
+        Assert.NotNull(result.GeneratedSource);
+
+        var source = result.GeneratedSource!;
+        var v1Start = source.IndexOf("ToUserDto(this global::Sample.UserV1", System.StringComparison.Ordinal);
+        var v2Start = source.IndexOf("ToUserDto(this global::Sample.UserV2", System.StringComparison.Ordinal);
+        Assert.True(v1Start >= 0 && v2Start > v1Start);
+
+        var v1Section = source.Substring(v1Start, v2Start - v1Start);
+        var v2Section = source.Substring(v2Start);
+
+        Assert.DoesNotContain("Extra", v1Section);
+        Assert.Contains("destination.Extra = source.Extra;", v2Section);
+        Assert.Contains("Extra = source.Extra }", v2Section);
+
+        Assert.DoesNotContain(result.GeneratorDiagnostics, d => d.Id == "GM001" && d.GetMessage().Contains("Extra"));
+        AssertNoCompileErrors(result);
+    }
+
+    [Fact]
+    public void MapIgnore_Unscoped_StillExcludesFromEverySourceAlongsideMultipleMapFrom()
+    {
+        // A plain, parameterless [MapIgnore] must keep working exactly as before even now that
+        // the attribute is repeatable/Type-scoped - it still excludes Extra from every mapping
+        // into UserDto regardless of source.
+        var result = GeneratorTestHelper.Run(@"
+using GeneratedMapper;
+
+namespace Sample;
+
+public sealed class UserV1
+{
+    public int Id { get; set; }
+    public string Extra { get; set; } = """";
+}
+
+public sealed class UserV2
+{
+    public int Id { get; set; }
+    public string Extra { get; set; } = """";
+}
+
+[MapFrom(typeof(UserV1))]
+[MapFrom(typeof(UserV2))]
+public sealed class UserDto
+{
+    public int Id { get; set; }
+
+    [MapIgnore]
+    public string Extra { get; set; } = """";
+}
+");
+
+        Assert.NotNull(result.GeneratedSource);
+        Assert.DoesNotContain("Extra", result.GeneratedSource);
+        Assert.DoesNotContain(result.GeneratorDiagnostics, d => d.Id == "GM001" && d.GetMessage().Contains("Extra"));
+        AssertNoCompileErrors(result);
+    }
+
+    [Fact]
+    public void MapIgnore_ScopedToUnrelatedSourceType_DoesNotExcludeProperty()
+    {
+        // The typeof(...) argument names a type that is never actually a source for this
+        // destination - it must not match anything, so the property maps normally instead of
+        // being silently (and incorrectly) treated as ignored.
+        var result = GeneratorTestHelper.Run(@"
+using GeneratedMapper;
+
+namespace Sample;
+
+public sealed class Unrelated
+{
+}
+
+[MapTo(typeof(UserDto))]
+public sealed class User
+{
+    public int Id { get; set; }
+    public string Extra { get; set; } = """";
+}
+
+public sealed class UserDto
+{
+    public int Id { get; set; }
+
+    [MapIgnore(typeof(Unrelated))]
+    public string Extra { get; set; } = """";
+}
+");
+
+        Assert.NotNull(result.GeneratedSource);
+        Assert.Contains("destination.Extra = source.Extra;", result.GeneratedSource);
+        AssertNoCompileErrors(result);
+    }
+
+    [Fact]
+    public void MapIgnore_MatchingSourceCombinedWithMapCondition_ReportsGM012AndStaysExcluded()
+    {
+        // A [MapCondition] on a property that a same-source-scoped [MapIgnore] also excludes
+        // can never run - the [MapIgnore] check's continue happens first every time, so the
+        // condition method is dead code. GM012 flags this instead of silently discarding it.
+        var result = GeneratorTestHelper.Run(@"
+using GeneratedMapper;
+
+namespace Sample;
+
+public sealed class User
+{
+    public string Body { get; set; } = """";
+}
+
+[MapFrom(typeof(User))]
+[MapCondition(typeof(User), nameof(Body), nameof(ShouldMap))]
+public sealed class UserDto
+{
+    [MapIgnore(typeof(User))]
+    public string Body { get; set; } = """";
+
+    public static bool ShouldMap(User source) => true;
+}
+");
+
+        Assert.NotNull(result.GeneratedSource);
+        Assert.DoesNotContain("Body", result.GeneratedSource);
+        Assert.Contains(result.GeneratorDiagnostics, d => d.Id == "GM012" && d.Severity == DiagnosticSeverity.Warning && d.GetMessage().Contains("Body"));
+        AssertNoCompileErrors(result);
+    }
+
+    [Fact]
+    public void MapIgnore_ScopedToDifferentSourceThanMapCondition_DoesNotReportGM012AndConditionStillApplies()
+    {
+        // The [MapIgnore] here is scoped to UserV2, while [MapCondition] is scoped to UserV1 -
+        // two independent, non-overlapping mappings into the same destination property. GM012
+        // must not fire, and the condition must still gate the UserV1 -> UserDto mapping
+        // normally while UserV2 -> UserDto stays unconditionally excluded.
+        var result = GeneratorTestHelper.Run(@"
+using GeneratedMapper;
+
+namespace Sample;
+
+public sealed class UserV1
+{
+    public string Body { get; set; } = """";
+}
+
+public sealed class UserV2
+{
+    public string Body { get; set; } = """";
+}
+
+[MapFrom(typeof(UserV1))]
+[MapCondition(typeof(UserV1), nameof(Body), nameof(ShouldMap))]
+[MapFrom(typeof(UserV2))]
+public sealed class UserDto
+{
+    [MapIgnore(typeof(UserV2))]
+    public string Body { get; set; } = """";
+
+    public static bool ShouldMap(UserV1 source) => true;
+}
+");
+
+        Assert.NotNull(result.GeneratedSource);
+        Assert.DoesNotContain(result.GeneratorDiagnostics, d => d.Id == "GM012");
+
+        var source = result.GeneratedSource!;
+        var v1Start = source.IndexOf("ToUserDto(this global::Sample.UserV1", System.StringComparison.Ordinal);
+        var v2Start = source.IndexOf("ToUserDto(this global::Sample.UserV2", System.StringComparison.Ordinal);
+        Assert.True(v1Start >= 0 && v2Start > v1Start);
+
+        var v1Section = source.Substring(v1Start, v2Start - v1Start);
+        var v2Section = source.Substring(v2Start);
+
+        Assert.Contains("if (global::Sample.UserDto.ShouldMap(source))", v1Section);
+        Assert.DoesNotContain("Body", v2Section);
+        AssertNoCompileErrors(result);
+    }
+
+    [Fact]
+    public void RequiredProperty_MappedFromMatchingSource_CompilesAndIsSetInTheInitializer()
+    {
+        // A bare `new Dest()` fails to compile (CS9035) whenever Dest has an unset 'required'
+        // member, even if a later statement in the same or a different method assigns it - the
+        // one-arg overload must set it directly in the object-initializer it constructs with.
+        var result = GeneratorTestHelper.Run(@"
+using GeneratedMapper;
+
+namespace Sample;
+
+[MapTo(typeof(UserDto))]
+public sealed class User
+{
+    public int Id { get; set; }
+    public string Name { get; set; } = """";
+}
+
+public sealed class UserDto
+{
+    public int Id { get; set; }
+
+    public required string Name { get; set; }
+}
+");
+
+        Assert.NotNull(result.GeneratedSource);
+        Assert.Contains("new global::Sample.UserDto { Name = source.Name }", result.GeneratedSource);
+        // The two-arg overload (populate-into-existing-instance) still assigns it too - the
+        // property is a regular mutable setter, so reassigning it there is legal and harmless.
+        Assert.Contains("destination.Name = source.Name;", result.GeneratedSource);
+        Assert.DoesNotContain(result.GeneratorDiagnostics, d => d.Id == "GM013");
+        AssertNoCompileErrors(result);
+    }
+
+    [Fact]
+    public void RequiredProperty_LeftUnmapped_ReportsGM013()
+    {
+        var result = GeneratorTestHelper.Run(@"
+using GeneratedMapper;
+
+namespace Sample;
+
+[MapTo(typeof(UserDto))]
+public sealed class User
+{
+    public int Id { get; set; }
+}
+
+public sealed class UserDto
+{
+    public int Id { get; set; }
+
+    public required string Name { get; set; }
+}
+");
+
+        Assert.NotNull(result.GeneratedSource);
+        Assert.Contains(result.GeneratorDiagnostics, d => d.Id == "GM013" && d.Severity == DiagnosticSeverity.Error && d.GetMessage().Contains("Name"));
+    }
+
+    [Fact]
+    public void RequiredProperty_CombinedWithMapCondition_ReportsGM014AndGM013AndExcludesTheProperty()
+    {
+        // A required member must be set unconditionally within the object-creation expression -
+        // there's no way to honor "maybe don't set it" for a required property, so the
+        // combination is rejected (GM014) and the property is treated as genuinely unmapped
+        // (GM013), rather than emitting code that fails to compile with no explanation.
+        var result = GeneratorTestHelper.Run(@"
+using GeneratedMapper;
+
+namespace Sample;
+
+[MapTo(typeof(UserDto))]
+[MapCondition(typeof(UserDto), nameof(UserDto.Name), nameof(ShouldMap))]
+public sealed class User
+{
+    public int Id { get; set; }
+    public string Name { get; set; } = """";
+
+    public static bool ShouldMap(User source) => true;
+}
+
+public sealed class UserDto
+{
+    public int Id { get; set; }
+
+    public required string Name { get; set; }
+}
+");
+
+        Assert.NotNull(result.GeneratedSource);
+        Assert.DoesNotContain("Name", result.GeneratedSource);
+        Assert.Contains(result.GeneratorDiagnostics, d => d.Id == "GM014" && d.Severity == DiagnosticSeverity.Warning && d.GetMessage().Contains("Name"));
+        Assert.Contains(result.GeneratorDiagnostics, d => d.Id == "GM013" && d.Severity == DiagnosticSeverity.Error && d.GetMessage().Contains("Name"));
+    }
+
+    [Fact]
+    public void MapIgnore_MatchingSourceCombinedWithMapUsingAndMapDefaultAndMapProperty_ReportsGM012ForAll()
+    {
+        // GM012 isn't limited to [MapCondition] - any of the four per-property overrides
+        // configured against a property a matching [MapIgnore] excludes is equally dead, since
+        // none of them are ever consulted once MapIgnore's continue fires first.
+        var result = GeneratorTestHelper.Run(@"
+using GeneratedMapper;
+
+namespace Sample;
+
+[MapTo(typeof(UserDto))]
+[MapUsing(typeof(UserDto), nameof(UserDto.Nickname), nameof(ComputeNickname))]
+[MapDefault(typeof(UserDto), nameof(UserDto.Nickname), ""Unknown"")]
+[MapProperty(typeof(UserDto), nameof(FullName), nameof(UserDto.Nickname))]
+public sealed class User
+{
+    public int Id { get; set; }
+    public string FullName { get; set; } = """";
+
+    public static string ComputeNickname(User source) => source.FullName;
+}
+
+public sealed class UserDto
+{
+    public int Id { get; set; }
+
+    [MapIgnore(typeof(User))]
+    public string Nickname { get; set; } = """";
+}
+");
+
+        Assert.NotNull(result.GeneratedSource);
+        Assert.DoesNotContain("Nickname", result.GeneratedSource);
+
+        var gm012 = Assert.Single(result.GeneratorDiagnostics.Where(d => d.Id == "GM012"));
+        Assert.Equal(DiagnosticSeverity.Warning, gm012.Severity);
+        var message = gm012.GetMessage();
+        Assert.Contains("[MapUsing]", message);
+        Assert.Contains("[MapDefault]", message);
+        Assert.Contains("[MapProperty]", message);
+        AssertNoCompileErrors(result);
+    }
+
+    [Fact]
+    public void MapIgnore_SourceTypeNeverMapped_ReportsGM015AndDoesNotExcludeTheProperty()
+    {
+        // [MapIgnore(typeof(TypoUser))] names a type that never actually maps into UserDto -
+        // almost certainly a typo, or left behind after a rename. It must not silently do
+        // nothing: report GM015, and since it doesn't match the real source (User), Extra is
+        // still mapped normally from User.
+        var result = GeneratorTestHelper.Run(@"
+using GeneratedMapper;
+
+namespace Sample;
+
+public sealed class TypoUser
+{
+}
+
+[MapTo(typeof(UserDto))]
+public sealed class User
+{
+    public int Id { get; set; }
+    public string Extra { get; set; } = """";
+}
+
+public sealed class UserDto
+{
+    public int Id { get; set; }
+
+    [MapIgnore(typeof(TypoUser))]
+    public string Extra { get; set; } = """";
+}
+");
+
+        Assert.NotNull(result.GeneratedSource);
+        Assert.Contains("destination.Extra = source.Extra;", result.GeneratedSource);
+
+        var gm015 = Assert.Single(result.GeneratorDiagnostics.Where(d => d.Id == "GM015"));
+        Assert.Equal(DiagnosticSeverity.Warning, gm015.Severity);
+        var message = gm015.GetMessage();
+        Assert.Contains("TypoUser", message);
+        Assert.Contains("Extra", message);
+        AssertNoCompileErrors(result);
+    }
+
+    [Fact]
+    public void MapIgnore_SourceTypeMatchesADeclaredMapping_DoesNotReportGM015()
+    {
+        var result = GeneratorTestHelper.Run(@"
+using GeneratedMapper;
+
+namespace Sample;
+
+[MapTo(typeof(UserDto))]
+public sealed class User
+{
+    public int Id { get; set; }
+    public string Extra { get; set; } = """";
+}
+
+public sealed class UserDto
+{
+    public int Id { get; set; }
+
+    [MapIgnore(typeof(User))]
+    public string Extra { get; set; } = """";
+}
+");
+
+        Assert.NotNull(result.GeneratedSource);
+        Assert.DoesNotContain(result.GeneratorDiagnostics, d => d.Id == "GM015");
+        AssertNoCompileErrors(result);
+    }
+
+    [Fact]
+    public void MapIgnore_UnscopedAlongsideScoped_ReportsGM016()
+    {
+        // The unscoped [MapIgnore] already excludes every source; the scoped one next to it
+        // adds nothing and is flagged as redundant configuration, not a real bug.
+        var result = GeneratorTestHelper.Run(@"
+using GeneratedMapper;
+
+namespace Sample;
+
+[MapTo(typeof(UserDto))]
+public sealed class User
+{
+    public int Id { get; set; }
+}
+
+public sealed class UserDto
+{
+    public int Id { get; set; }
+
+    [MapIgnore]
+    [MapIgnore(typeof(User))]
+    public int ComputedOnly { get; set; }
+}
+");
+
+        Assert.NotNull(result.GeneratedSource);
+
+        var gm016 = Assert.Single(result.GeneratorDiagnostics.Where(d => d.Id == "GM016"));
+        Assert.Equal(DiagnosticSeverity.Info, gm016.Severity);
+        var message = gm016.GetMessage();
+        Assert.Contains("ComputedOnly", message);
+        Assert.Contains("unscoped", message);
+        Assert.Contains("Sample.User", message);
+        AssertNoCompileErrors(result);
+    }
+
+    [Fact]
+    public void MapIgnore_SameSourceTypeTwice_ReportsGM016()
+    {
+        var result = GeneratorTestHelper.Run(@"
+using GeneratedMapper;
+
+namespace Sample;
+
+[MapTo(typeof(UserDto))]
+public sealed class User
+{
+    public int Id { get; set; }
+    public string Extra { get; set; } = """";
+}
+
+public sealed class UserDto
+{
+    public int Id { get; set; }
+
+    [MapIgnore(typeof(User))]
+    [MapIgnore(typeof(User))]
+    public string Extra { get; set; } = """";
+}
+");
+
+        Assert.NotNull(result.GeneratedSource);
+
+        var gm016 = Assert.Single(result.GeneratorDiagnostics.Where(d => d.Id == "GM016"));
+        Assert.Equal(DiagnosticSeverity.Info, gm016.Severity);
+        var message = gm016.GetMessage();
+        Assert.Contains("Extra", message);
+        Assert.Contains("more than one", message);
+        AssertNoCompileErrors(result);
+    }
+
+    [Fact]
+    public void MapIgnore_ScopedToTwoDifferentRealSources_DoesNotReportGM016()
+    {
+        // The legitimate repeatable-MapIgnore usage pattern: one scoped attribute per source
+        // that should actually be excluded, each naming a real, distinct source. Not redundant.
+        var result = GeneratorTestHelper.Run(@"
+using GeneratedMapper;
+
+namespace Sample;
+
+public sealed class UserV1
+{
+    public int Id { get; set; }
+    public string Extra { get; set; } = """";
+}
+
+public sealed class UserV2
+{
+    public int Id { get; set; }
+    public string Extra { get; set; } = """";
+}
+
+public sealed class UserV3
+{
+    public int Id { get; set; }
+    public string Extra { get; set; } = """";
+}
+
+[MapFrom(typeof(UserV1))]
+[MapFrom(typeof(UserV2))]
+[MapFrom(typeof(UserV3))]
+public sealed class UserDto
+{
+    public int Id { get; set; }
+
+    [MapIgnore(typeof(UserV1))]
+    [MapIgnore(typeof(UserV2))]
+    public string Extra { get; set; } = """";
+}
+");
+
+        Assert.NotNull(result.GeneratedSource);
+        Assert.DoesNotContain(result.GeneratorDiagnostics, d => d.Id == "GM016");
+        Assert.DoesNotContain(result.GeneratorDiagnostics, d => d.Id == "GM015");
         AssertNoCompileErrors(result);
     }
 

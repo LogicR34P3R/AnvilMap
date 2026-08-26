@@ -24,7 +24,7 @@ The mapping configuration lives on the mapping declaration — either the source
 For each declared mapping the generator emits, into a `GeneratedMapper.GeneratedMappings` static class:
 
 - `To{Destination}(this Source source)` / `To{Destination}(this Source source, Destination destination)` — imperative, in-memory mapping.
-- `To{Destination}Projection` — a static `Expression<Func<Source, Destination>>` built entirely from inlined object initializers (no method calls), so it's translatable by EF Core.
+- `{Source}To{Destination}Projection` — a static `Expression<Func<Source, Destination>>` built entirely from inlined object initializers (no method calls), so it's translatable by EF Core.
 - `ProjectTo{Destination}(this IQueryable<Source> source)` — applies the projection to a query, e.g. `dbContext.Blogs.ProjectToBlogDto()`.
 - A generic `Map<TDestination>`/`Map<TSource,TDestination>` dispatcher (backed by static `FrozenDictionary` lookup tables, not a chain of type checks), plus a `GeneratedMapperService : IMapper` for DI registration (`services.AddSingleton<IMapper, GeneratedMapperService>()`).
 
@@ -188,6 +188,8 @@ public sealed class Category
 A destination with `init`-only properties (including non-positional records) is mapped by building the object via initializer syntax in `To{Dest}(source)`; the two-arg `To{Dest}(source, destination)` overload (and `IMapper.Map(source, destination)`) is omitted for it, since an `init` property can't be assigned after construction (`GM008`).
 
 Positional records (e.g. `record UserDto(int Id, string Name);`) are supported too: when the destination has no parameterless constructor, the generator looks for one whose parameters all match already-mapped, unconditioned properties by name and type — the record's own synthesized constructor, in the common case — and builds `new UserDto(source.Id, source.Name)` instead, both imperatively and in `.ProjectTo{Destination}()`. Any settable property not covered by that constructor is still assigned afterward (via object-initializer syntax if it's `init`-only, sequential assignment otherwise). If no confident constructor match exists — a required parameter has no matching source property, or one is gated by `[MapCondition]` (conditions can't become constructor arguments) — the mapping is skipped entirely with `GM006` rather than guessing.
+
+A `required` destination property (C# 11) is set inline wherever the destination gets constructed (the object-initializer in `To{Dest}(source)`, or the constructor call for a positional record), since C# enforces `required` on that expression itself — assigning it in a later statement doesn't count. A `required` property with no resolved mapping is reported as `GM013` rather than surfacing only as a raw `CS9035` in the generated file; combining `required` with `[MapCondition]` is rejected outright (`GM014`), since a required member can't be conditionally left unset.
 
 ## Project layout
 
