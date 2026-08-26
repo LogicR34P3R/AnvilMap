@@ -47,16 +47,18 @@ public sealed class UserDto
             .OrderByDescending(f => f)
             .First();
 
-        var abstractionsNetStandardDll = Path.Combine(
-            FindRepoRoot(), "src", "GeneratedMapper.Abstractions", "bin", "Debug", "netstandard2.0",
-            "GeneratedMapper.Abstractions.dll");
+        // Not hardcoded to Debug or Release - whichever configuration actually built this
+        // solution (CI builds Release; a local run is usually Debug) is the one that exists.
+        var abstractionsBinDir = Path.Combine(FindRepoRoot(), "src", "GeneratedMapper.Abstractions", "bin");
+        var abstractionsNetStandardDll = Directory.GetFiles(abstractionsBinDir, "GeneratedMapper.Abstractions.dll", SearchOption.AllDirectories)
+            .FirstOrDefault(f => f.Contains(Path.Combine("netstandard2.0", "GeneratedMapper.Abstractions.dll")));
 
-        Assert.True(File.Exists(abstractionsNetStandardDll), $"Expected to find {abstractionsNetStandardDll} - build GeneratedMapper.Abstractions (netstandard2.0) first.");
+        Assert.True(abstractionsNetStandardDll is not null, $"Expected to find a netstandard2.0 GeneratedMapper.Abstractions.dll under {abstractionsBinDir} - build GeneratedMapper.Abstractions (netstandard2.0) first.");
 
         return new[]
         {
             MetadataReference.CreateFromFile(netstandardDll),
-            MetadataReference.CreateFromFile(abstractionsNetStandardDll),
+            MetadataReference.CreateFromFile(abstractionsNetStandardDll!),
         };
     }
 
