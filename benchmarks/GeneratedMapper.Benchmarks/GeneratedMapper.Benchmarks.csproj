@@ -37,13 +37,18 @@
          executable, and net6.0 is what actually exercises the generator's netstandard2.0-shaped
          fallback branches (no FrozenDictionary) since GeneratedMapper.Abstractions has no
          net6.0-specific target - a net6.0 consumer resolves its netstandard2.0 asset. net10.0
-         added to compare against today's net8.0 baseline before any interceptor-dispatch work
-         (a possible future feature, gated on its own separate decision) exists to benchmark. -->
+         added to compare against today's net8.0 baseline, including interceptor-based dispatch
+         (see Scenarios/FlatRuntimeComparisonBenchmarks.cs's DispatcherClosedGeneric). -->
     <TargetFrameworks>net6.0;net8.0;net10.0</TargetFrameworks>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <EmitCompilerGeneratedFiles>true</EmitCompilerGeneratedFiles>
     <CompilerGeneratedFilesOutputPath>Generated</CompilerGeneratedFilesOutputPath>
+    <!-- References the generator via ProjectReference, not the packed NuGet package, so it
+         doesn't get the buildTransitive-injected InterceptorsNamespaces a real consumer gets
+         automatically - opts in itself. Harmless to set unconditionally: interceptors are a no-op
+         wherever the generator doesn't actually emit any, so net6.0/net8.0 are unaffected. -->
+    <InterceptorsNamespaces>$(InterceptorsNamespaces);GeneratedMapper</InterceptorsNamespaces>
   </PropertyGroup>
 
 </Project>

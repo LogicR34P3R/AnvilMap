@@ -79,5 +79,10 @@
   <ItemGroup>
     <None Include="..\..\README.md" Pack="true" PackagePath="\" />
     <None Include="$(OutputPath)\$(AssemblyName).dll" Pack="true" PackagePath="analyzers/dotnet/cs" Visible="false" />
+    <!-- Auto-configures InterceptorsNamespaces for any consumer of this package - see the
+         props file's own comment. Packed under buildTransitive (not just build) so the property
+         still flows if this package is ever referenced transitively through another one, not just
+         as a direct PackageReference. -->
+    <None Include="buildTransitive\GeneratedMapper.Generator.props" Pack="true" PackagePath="buildTransitive" />
   </ItemGroup>
 </Project>
