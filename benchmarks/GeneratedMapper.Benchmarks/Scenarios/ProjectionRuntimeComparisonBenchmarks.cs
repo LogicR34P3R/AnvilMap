@@ -12,9 +12,8 @@ namespace GeneratedMapper.Benchmarks.Scenarios;
 
 // See FlatRuntimeComparisonBenchmarks for why this class (and its siblings) exist. Projection
 // shape: EF Core against SQLite (in-memory), mirroring ProjectionBenchmarks (both mappers'
-// generated SQL is a statistical tie on net8.0 per docs/benchmarks.md - this checks whether that
-// holds across runtimes too). Two differences from every other *RuntimeComparisonBenchmarks
-// sibling:
+// generated SQL is a statistical tie on net8.0 - this checks whether that holds across runtimes
+// too). Two differences from every other *RuntimeComparisonBenchmarks sibling:
 //   - Only net8.0/net10.0, not net6.0 - Microsoft.EntityFrameworkCore.Sqlite has no
 //     net6.0-compatible asset (see GeneratedMapper.Benchmarks.csproj's own comment on that
 //     PackageReference), so this file is excluded from the net6.0 build entirely, the same way

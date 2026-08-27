@@ -12,8 +12,8 @@ namespace GeneratedMapper.Benchmarks.Scenarios;
 // of milliseconds per call on a single runtime; multiplying it by three runtimes' worth of
 // [SimpleJob] iterations would balloon this class's own run time for a data point this
 // comparison doesn't need (the runtime-vs-runtime gap is already visible at 1,000). Also worth
-// noting: GraphMappingBenchmarks (net8.0 only) is the one scenario in docs/benchmarks.md where
-// AutoMapper wins outright - this class is where that finding gets checked across runtimes too.
+// noting: GraphMappingBenchmarks (net8.0 only) is the one scenario where AutoMapper wins outright -
+// this class is where that finding gets checked across runtimes too.
 [SimpleJob(RuntimeMoniker.Net60)]
 [SimpleJob(RuntimeMoniker.Net80)]
 [SimpleJob(RuntimeMoniker.Net10_0)]

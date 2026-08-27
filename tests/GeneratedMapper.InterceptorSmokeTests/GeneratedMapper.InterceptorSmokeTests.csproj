@@ -1,0 +1,49 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <!-- A real MSBuild build (not the in-memory GeneratorTestHelper harness used by
+         GeneratedMapper.Generator.Tests), proving interception works end-to-end through the
+         actual SDK/Roslyn toolchain and the real InterceptorsNamespaces wiring - net8.0 doubles
+         as a real-build control proving nothing is intercepted pre-C#14. -->
+    <TargetFrameworks>net8.0;net10.0</TargetFrameworks>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+
+    <IsPackable>false</IsPackable>
+    <IsTestProject>true</IsTestProject>
+
+    <!-- Same-solution ProjectReference consumer, so it doesn't get the packed
+         buildTransitive-injected InterceptorsNamespaces a real external NuGet consumer gets
+         automatically - opts in itself, matching benchmarks/GeneratedMapper.Benchmarks.csproj.
+         Harmless to set unconditionally regardless of TargetFramework - the net8.0 leg relies
+         on that. -->
+    <InterceptorsNamespaces>$(InterceptorsNamespaces);GeneratedMapper</InterceptorsNamespaces>
+
+    <!-- $(TargetFramework) kept in the path so this project's own test code can locate the RIGHT
+         TFM's generated output on disk without one multi-targeted build overwriting another's. -->
+    <EmitCompilerGeneratedFiles>true</EmitCompilerGeneratedFiles>
+    <CompilerGeneratedFilesOutputPath>Generated\$(TargetFramework)</CompilerGeneratedFilesOutputPath>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.8.0" />
+    <PackageReference Include="xunit" Version="2.5.3" />
+    <PackageReference Include="xunit.runner.visualstudio" Version="2.5.3" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Using Include="Xunit" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\GeneratedMapper.Abstractions\GeneratedMapper.Abstractions.csproj" />
+    <ProjectReference Include="..\..\src\GeneratedMapper.Generator\GeneratedMapper.Generator.csproj"
+                      OutputItemType="Analyzer"
+                      ReferenceOutputAssembly="false" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Compile Remove="Generated\**\*.cs" />
+  </ItemGroup>
+
+</Project>

@@ -18,6 +18,7 @@ internal static partial class MappingEmitter
     public static string Emit(
         IReadOnlyCollection<MappingModel> mappings,
         ConsumerCapabilities capabilities,
+        IReadOnlyCollection<InterceptedMapCall> interceptedCalls,
         Action<Diagnostic>? report = null)
     {
         var validMappings = new List<MappingModel>();
@@ -116,7 +117,19 @@ internal static partial class MappingEmitter
 
         EmitMapperService(sb, validMappings);
 
+        // Still inside `namespace GeneratedMapper` - the interceptor class lives alongside
+        // GeneratedMappings/GeneratedMapperService so InterceptorsNamespaces only ever needs to
+        // list this one namespace, not a second one.
+        var emittedInterceptors = EmitInterceptors(sb, interceptedCalls, capabilities, byPair);
+
         sb.AppendLine("}");
+
+        // The InterceptsLocation polyfill must be a top-level type in exactly
+        // System.Runtime.CompilerServices (the compiler recognizes it by that name alone - the BCL
+        // never exposes a public one, confirmed empirically), so it can't nest inside the namespace
+        // block just closed above. Only emitted when an interceptor actually exists to attribute.
+        if (emittedInterceptors)
+            EmitInterceptsLocationPolyfill(sb);
 
         return sb.ToString();
     }
