@@ -26,7 +26,7 @@ For each declared mapping the generator emits, into a `GeneratedMapper.Generated
 - `To{Destination}(this Source source)` / `To{Destination}(this Source source, Destination destination)` — imperative, in-memory mapping.
 - `{Source}To{Destination}Projection` — a static `Expression<Func<Source, Destination>>` built entirely from inlined object initializers (no method calls), so it's translatable by EF Core.
 - `ProjectTo{Destination}(this IQueryable<Source> source)` — applies the projection to a query, e.g. `dbContext.Blogs.ProjectToBlogDto()`.
-- A generic `Map<TDestination>`/`Map<TSource,TDestination>` dispatcher (backed by static `FrozenDictionary` lookup tables, not a chain of type checks), plus a `GeneratedMapperService : IMapper` for DI registration (`services.AddSingleton<IMapper, GeneratedMapperService>()`).
+- A generic `Map<TDestination>`/`Map<TSource,TDestination>` dispatcher (backed by static `FrozenDictionary` lookup tables, not a chain of type checks), plus a `GeneratedMapperService : IMapper` for DI registration (`services.AddSingleton<IMapper, GeneratedMapperService>()`). On C# 14, a statically-visible closed-generic `Map<,>` call gets an even faster path automatically — see "Interceptor-based dispatch" below.
 
 Nested and enumerable (`List<T>`/array/`IEnumerable<T>`) properties are mapped automatically when a mapping exists between the element types.
 
@@ -222,6 +222,31 @@ Both attributes are absent below net6 (netstandard2.0 included) — emitting the
 would break compilation for exactly those consumers, so like `FrozenDictionary` and `#nullable`/`!`
 above, this is gated by asking the consumer's own `Compilation` whether the type resolves
 (`ConsumerCapabilities.CanSuppressTrimWarnings`), not assumed from a TFM name.
+
+## Interceptor-based dispatch (C# 14)
+
+On a consumer targeting C# 14 (.NET 10+), a call to the generic dispatcher written with both type
+arguments given explicitly — `GeneratedMappings.Map<Source, Dest>(source)` or the two-arg
+`Map<Source, Dest>(source, destination)` — that the generator can see at compile time gets
+redirected via a C# interceptor straight to the concrete `source.ToDest(...)` method, skipping the
+`FrozenDictionary` lookup entirely for that call site. Measured on a flat mapping shape: the
+one-arg case lands statistically tied with calling the extension method directly (down from ~1.7x
+its overhead), and the two-arg case (already allocation-free, since it populates an existing
+instance) does better still.
+
+This never applies to `IMapper.Map<TSource,TDestination>(...)` calls, even on C# 14 — interceptors
+redirect by source *location*, not by the runtime type behind the receiver, so intercepting an
+interface-typed call would silently bypass a mocked/faked `IMapper` in tests. `IMapper` stays
+exactly as fast (and exactly as mockable) as it's always been; only a direct call naming
+`GeneratedMappings` gets the fast path. It also never applies to the type-erased
+`Map<TDestination>(object source)` overload (only the destination is statically known there) or to
+a call written with open generic type parameters from an enclosing generic method — both fall back
+to the untouched dictionary dispatch, always correctly.
+
+Nothing to opt into: this is automatic, gated per-consumer on the same dynamic-capability-detection
+pattern as `FrozenDictionary`/`#nullable` above, and the NuGet package ships a `buildTransitive`
+props file that configures the one MSBuild property (`InterceptorsNamespaces`) this needs — no
+manual `.csproj` edits required.
 
 ## Project layout
 

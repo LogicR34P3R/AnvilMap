@@ -111,7 +111,7 @@ every build):
 | Imperative mapper (populate) | `Dest To{Dest}(this Source source, Dest destination)` | Map into an object you already have (e.g. an EF Core entity you're updating). Omitted if `Dest` has `init`-only properties — see "Init-only and record destinations" below. |
 | Projection expression | `Expression<Func<Source, Dest>> {Source}To{Dest}Projection` | A real expression tree, built only from object initializers — no method calls — so it's translatable by any LINQ provider, including EF Core. Qualified by both the source and destination name, since a destination can have more than one source (multiple `[MapFrom]`). |
 | Projection extension | `IQueryable<Dest> ProjectTo{Dest}(this IQueryable<Source> source)` | `dbContext.Users.ProjectToUserDto()` — applies the expression above to a query. Only the columns you actually mapped are selected; nothing else comes back from the database. |
-| Generic dispatcher | `TDest Map<TDest>(object source)` / `Map<TSource,TDest>(TSource source)` / `Map<TSource,TDest>(TSource source, TDest destination)` | Type-erased mapping by runtime type, backed by a `FrozenDictionary` lookup — not a chain of `if`/`is` checks. Useful for generic infrastructure code that doesn't know the concrete types at compile time. |
+| Generic dispatcher | `TDest Map<TDest>(object source)` / `Map<TSource,TDest>(TSource source)` / `Map<TSource,TDest>(TSource source, TDest destination)` | Type-erased mapping by runtime type, backed by a `FrozenDictionary` lookup — not a chain of `if`/`is` checks. Useful for generic infrastructure code that doesn't know the concrete types at compile time. On C# 14, a call to the two-type-argument overloads written directly (not through `IMapper`) with both types statically known gets an automatic, faster path — see "Interceptor-based dispatch" below. |
 | DI service | `GeneratedMapperService : IMapper` | Wraps the dispatcher above behind an injectable interface. |
 
 Every one of these is produced by a Roslyn incremental source generator at build time — nothing
@@ -455,6 +455,27 @@ under `dotnet publish -p:PublishAot=true` — verified via `samples/GeneratedMap
 small console app published and actually run under Native AOT. See README.md's "Native AOT"
 section for the one caveat (a trim warning tied to the SQL-projection feature specifically) and
 how the generator handles it.
+
+## Interceptor-based dispatch (C# 14)
+
+If your project targets C# 14 (.NET 10+), a call to the generic dispatcher written directly with
+both type arguments given —
+
+```csharp
+UserDto dto = GeneratedMappings.Map<User, UserDto>(user);
+```
+
+— gets rewritten by the compiler at build time to call `user.ToUserDto()` directly, skipping the
+`FrozenDictionary` lookup for that call site. Nothing to opt into: it's automatic, gated on your
+project's own toolchain the same way `FrozenDictionary`/`#nullable` support is, and requires no
+`.csproj` changes — the package configures the one MSBuild property it needs on its own.
+
+This never applies to a call made through `IMapper` (`mapper.Map<User, UserDto>(user)`), even on
+C# 14 — that path is deliberately left untouched so injecting a mock/fake `IMapper` in tests keeps
+working exactly as before. If you're not calling `GeneratedMappings.Map<,>` directly (most code
+goes through `IMapper` or the extension methods, and doesn't need to think about this at all), this
+section doesn't change anything about how you use the library. See README.md's "Interceptor-based
+dispatch" section for the full reasoning and measured numbers.
 
 ## What it doesn't do
 
