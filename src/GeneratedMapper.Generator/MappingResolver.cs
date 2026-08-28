@@ -156,10 +156,9 @@ internal static partial class MappingResolver
                     continue;
                 }
 
-                var converterDefault = explicitDefaults.TryGetValue(destinationProperty.Name, out var converterDefaultLiteral)
-                    && CanCoalesceNull(destinationProperty.Type)
-                        ? converterDefaultLiteral
-                        : null;
+                var converterDefault = ResolveDefault(
+                    destinationProperty, PropertyMappingKind.Converted, destinationProperty.Type,
+                    explicitDefaults, source, destination, report);
 
                 properties.Add(new PropertyMappingModel(
                     string.Empty,
@@ -270,14 +269,9 @@ internal static partial class MappingResolver
                 continue;
             }
 
-            // Only a Direct match produces a plain value/reference expression a literal can
-            // meaningfully `??` against - a Nested/Enumerable value's own type can't be spelled
-            // as an attribute constant, so [MapDefault] is silently ignored there.
-            var propertyDefault = resolution.Kind == PropertyMappingKind.Direct &&
-                explicitDefaults.TryGetValue(destinationProperty.Name, out var defaultLiteral) &&
-                CanCoalesceNull(sourceProperty.Type)
-                    ? defaultLiteral
-                    : null;
+            var propertyDefault = ResolveDefault(
+                destinationProperty, resolution.Kind.Value, sourceProperty.Type,
+                explicitDefaults, source, destination, report);
 
             properties.Add(new PropertyMappingModel(
                 flattenedSourcePath ?? sourceProperty.Name,
@@ -420,9 +414,53 @@ internal static partial class MappingResolver
         return null;
     }
 
+    // [MapDefault] only ever applies to a Direct or Converted property whose coalesce-against
+    // type can hold null - every other combination reports GM019 instead of resolving silently.
+    // `coalesceAgainst` is the source property's type for a Direct match, or the destination
+    // property's type for a Converted one (the converter's return type - there's no "source"
+    // value to coalesce against there).
+    private static string? ResolveDefault(
+        IPropertySymbol destinationProperty,
+        PropertyMappingKind kind,
+        ITypeSymbol coalesceAgainst,
+        IReadOnlyDictionary<string, string?> explicitDefaults,
+        INamedTypeSymbol source,
+        INamedTypeSymbol destination,
+        Action<Diagnostic>? report)
+    {
+        if (!explicitDefaults.TryGetValue(destinationProperty.Name, out var literal))
+        {
+            return null;
+        }
+
+        string? reason = kind switch
+        {
+            not PropertyMappingKind.Direct and not PropertyMappingKind.Converted =>
+                "the property isn't mapped as a plain value (it's a nested or enumerable mapping), so there's no expression to coalesce a literal against",
+            _ when literal is null =>
+                "its value isn't a literal Roslyn can express as an attribute constant (e.g. an array or typeof(...))",
+            _ when !CanCoalesceNull(coalesceAgainst) =>
+                $"'{coalesceAgainst.ToDisplayString()}' can't be null, so there's nothing for the default to substitute for",
+            _ => null
+        };
+
+        if (reason is not null)
+        {
+            report?.Invoke(Diagnostic.Create(
+                Diagnostics.MapDefaultHasNoEffect,
+                destinationProperty.Locations.FirstOrDefault() ?? Location.None,
+                destinationProperty.Name,
+                source.ToDisplayString(),
+                destination.ToDisplayString(),
+                reason));
+            return null;
+        }
+
+        return literal;
+    }
+
     // `??` only compiles against a reference type or Nullable<T> - a plain value type (int,
-    // a non-nullable struct) can never be null, so [MapDefault] against one is silently ignored
-    // rather than emitting code that fails to compile.
+    // a non-nullable struct) can never be null.
     private static bool CanCoalesceNull(ITypeSymbol type)
         => type.IsReferenceType || (type.IsValueType && type.OriginalDefinition.SpecialType == SpecialType.System_Nullable_T);
 

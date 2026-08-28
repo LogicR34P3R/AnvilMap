@@ -14,22 +14,31 @@ internal static partial class MappingEmitter
         StringBuilder sb,
         MappingModel mapping,
         Dictionary<(string Source, string Destination), MappingModel> byPair,
+        HashSet<(string Source, string Destination)> mappingsWithOrphanedNestedReference,
         List<string> projectionFieldInitializers,
         HashSet<string> destinationTypesUsingBind,
         System.Action<Diagnostic>? report)
     {
         // `visiting` guards against infinite recursion on a cyclic mapping graph; hitting an
-        // already-visiting pair aborts the whole projection (GM002) rather than truncating it.
+        // already-visiting pair aborts the whole projection rather than truncating it.
         var visiting = new HashSet<(string, string)>();
         var body = BuildProjectionInitializer(mapping, byPair, "source", visiting, destinationTypesUsingBind, report);
 
         if (body is null)
         {
-            report?.Invoke(Diagnostic.Create(
-                Diagnostics.ProjectionCycleSkipped,
-                Location.None,
-                mapping.Source.DisplayName,
-                mapping.Destination.DisplayName));
+            // A null body isn't always an actual cycle - a Nested/Enumerable property whose own
+            // mapping was dropped from byPair (GM018, already reported by
+            // MappingEmitter.ReportOrphanedNestedMappings) hits the exact same code path below.
+            // Only report GM002 when this mapping has no such already-explained reason.
+            if (!mappingsWithOrphanedNestedReference.Contains((mapping.Source.FullyQualifiedName, mapping.Destination.FullyQualifiedName)))
+            {
+                report?.Invoke(Diagnostic.Create(
+                    Diagnostics.ProjectionCycleSkipped,
+                    Location.None,
+                    mapping.Source.DisplayName,
+                    mapping.Destination.DisplayName));
+            }
+
             return;
         }
 
