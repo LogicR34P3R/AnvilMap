@@ -13,9 +13,9 @@
          (analyzer assembly references a newer compiler than the one running it). 5.0.0 is also
          the first version LanguageVersion.CSharp14 compiles under (4.14.0 still fails CS0117). -->
     <PackageVersion Include="Microsoft.CodeAnalysis.CSharp" Version="5.0.0" />
-    <!-- Kept equal to Microsoft.CodeAnalysis.CSharp above - GeneratedMapper.CodeFixes.Tests loads
-         GeneratedMapper.Generator via ProjectReference, so a mismatch produces a CS1705 assembly
-         identity conflict at build time. src/GeneratedMapper.CodeFixes overrides this down to
+    <!-- Kept equal to Microsoft.CodeAnalysis.CSharp above - AnvilMap.CodeFixes.Tests loads
+         AnvilMap.Generator via ProjectReference, so a mismatch produces a CS1705 assembly
+         identity conflict at build time. src/AnvilMap.CodeFixes overrides this down to
          4.8.0 for its own netstandard2.0 analyzer host compatibility floor. -->
     <PackageVersion Include="Microsoft.CodeAnalysis.CSharp.Workspaces" Version="5.0.0" />
 

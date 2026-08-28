@@ -1,7 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
-  <!-- Deliberately outside GeneratedMapper.sln: this project exists to consume the packed
-       GeneratedMapper NuGet packages from a local feed (nuget.config, next to this file) exactly
+  <!-- Deliberately outside AnvilMap.sln: this project exists to consume the packed
+       AnvilMap NuGet packages from a local feed (nuget.config, next to this file) exactly
        the way a real external consumer would, via a plain `<PackageReference>` - never as a
        ProjectReference/analyzer wired in directly like the rest of this repo does. See
        .github/workflows/ci.yml's "Smoke-test packages" step. -->
@@ -17,7 +17,7 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="GeneratedMapper.Generator" Version="1.0.0" />
+    <PackageReference Include="AnvilMap.Generator" Version="1.0.0" />
   </ItemGroup>
 
 </Project>

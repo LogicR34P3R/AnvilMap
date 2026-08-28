@@ -1,4 +1,4 @@
-# Using GeneratedMapper
+# Using AnvilMap
 
 A practical guide for consumers: how to install it, what it generates, and how to call the
 generated code. For the full list of attributes and diagnostics in one place, see the
@@ -7,45 +7,45 @@ ground task-by-task instead.
 
 ## Installing
 
-GeneratedMapper isn't published to nuget.org yet. Until it is, you have two ways to consume it:
+AnvilMap isn't published to nuget.org yet. Until it is, you have two ways to consume it:
 
 **From a locally built package** (recommended if you just want to try it):
 
 ```
-dotnet pack GeneratedMapper.sln -c Release -o ./nupkg-out
+dotnet pack AnvilMap.sln -c Release -o ./nupkg-out
 ```
 
 then add a `nuget.config` pointing at that folder in your own project and
 
 ```
-dotnet add package GeneratedMapper.Generator --version 1.0.0
+dotnet add package AnvilMap.Generator --version 1.0.0
 ```
 
-This one package pulls in `GeneratedMapper.Abstractions` automatically — you don't need to
+This one package pulls in `AnvilMap.Abstractions` automatically — you don't need to
 reference it separately. See `smoke-test/ConsumerSmokeTest` in this repo for a working example
 of exactly this setup.
 
 **As a project reference**, if you're working inside a solution that already contains
-GeneratedMapper's source (e.g. you cloned this repo alongside your own project):
+AnvilMap's source (e.g. you cloned this repo alongside your own project):
 
 ```xml
 <ItemGroup>
-  <ProjectReference Include="..\GeneratedMapper\src\GeneratedMapper.Abstractions\GeneratedMapper.Abstractions.csproj" />
-  <ProjectReference Include="..\GeneratedMapper\src\GeneratedMapper.Generator\GeneratedMapper.Generator.csproj"
+  <ProjectReference Include="..\AnvilMap\src\AnvilMap.Abstractions\AnvilMap.Abstractions.csproj" />
+  <ProjectReference Include="..\AnvilMap\src\AnvilMap.Generator\AnvilMap.Generator.csproj"
                     OutputItemType="Analyzer"
                     ReferenceOutputAssembly="false" />
 </ItemGroup>
 ```
 
 Once nuget.org publishing happens, this section will just say `dotnet add package
-GeneratedMapper.Generator`.
+AnvilMap.Generator`.
 
 ## Quick start
 
 Declare a mapping by putting `[MapTo]` on your source type — the entity, not the DTO:
 
 ```csharp
-using GeneratedMapper;
+using AnvilMap;
 
 [MapTo(typeof(UserDto))]
 public sealed class User
@@ -78,7 +78,7 @@ from them, put the declaration on the DTO instead, with `[MapFrom]` in place of 
 the same mapping, just declared from the other side:
 
 ```csharp
-using GeneratedMapper;
+using AnvilMap;
 
 // User has no reference to UserDto anywhere.
 public sealed class User
@@ -102,7 +102,7 @@ below behave when placed on the DTO this way instead.
 ## What gets generated
 
 For every `[MapTo(typeof(Dest))]` declaration, the generator emits into a single
-`GeneratedMapper.GeneratedMappings` static class (one file for the whole project, regenerated on
+`AnvilMap.GeneratedMappings` static class (one file for the whole project, regenerated on
 every build):
 
 | What | Signature | Use it for |
@@ -112,7 +112,7 @@ every build):
 | Projection expression | `Expression<Func<Source, Dest>> {Source}To{Dest}Projection` | A real expression tree, built only from object initializers — no method calls — so it's translatable by any LINQ provider, including EF Core. Qualified by both the source and destination name, since a destination can have more than one source (multiple `[MapFrom]`). |
 | Projection extension | `IQueryable<Dest> ProjectTo{Dest}(this IQueryable<Source> source)` | `dbContext.Users.ProjectToUserDto()` — applies the expression above to a query. Only the columns you actually mapped are selected; nothing else comes back from the database. |
 | Generic dispatcher | `TDest Map<TDest>(object source)` / `Map<TSource,TDest>(TSource source)` / `Map<TSource,TDest>(TSource source, TDest destination)` | Type-erased mapping by runtime type, backed by a `FrozenDictionary` lookup — not a chain of `if`/`is` checks. Useful for generic infrastructure code that doesn't know the concrete types at compile time. On C# 14, a call to the two-type-argument overloads written directly (not through `IMapper`) with both types statically known gets an automatic, faster path — see "Interceptor-based dispatch" below. |
-| DI service | `GeneratedMapperService : IMapper` | Wraps the dispatcher above behind an injectable interface. |
+| DI service | `AnvilMapService : IMapper` | Wraps the dispatcher above behind an injectable interface. |
 
 Every one of these is produced by a Roslyn incremental source generator at build time — nothing
 runs at your app's startup to build a configuration, and there's no reflection at runtime. The
@@ -132,7 +132,7 @@ directly:
 
 ```csharp
 // Startup/composition root
-services.AddSingleton<IMapper, GeneratedMapperService>();
+services.AddSingleton<IMapper, AnvilMapService>();
 
 // Wherever you need it
 public sealed class UserService(IMapper mapper)
@@ -208,12 +208,12 @@ public sealed class UserDto
 `[MapIgnore]` is repeatable, so a property can be ignored for several specific sources by
 decorating it with one attribute per source type. It always wins over anything else configured
 for that property in the excluded mapping — a `[MapCondition]`, `[MapUsing]`, `[MapDefault]`, or
-`[MapProperty]` on an ignored property is dead code and reported as GM012.
+`[MapProperty]` on an ignored property is dead code and reported as AM012.
 
 Two more checks catch likely mistakes: a `[MapIgnore(typeof(X))]` where `X` never actually maps
-into that destination — a typo, or stale after a rename — is reported as GM015 rather than
+into that destination — a typo, or stale after a rename — is reported as AM015 rather than
 silently doing nothing; and an unscoped `[MapIgnore]` alongside a scoped one, or the same source
-type named twice, is reported as GM016 (a tidiness nag, not a bug).
+type named twice, is reported as AM016 (a tidiness nag, not a bug).
 
 **Gate a property on a runtime condition** (`[MapCondition]`) — a `static bool` method on the
 source type decides whether the property gets assigned:
@@ -340,7 +340,7 @@ could throw at runtime) — the leaf property's own nullability is unaffected by
 the same rules as a normal direct match.
 
 If a destination name splits more than one valid way, the match is ambiguous and left unmapped
-(`GM010`) rather than guessed:
+(`AM010`) rather than guessed:
 
 ```csharp
 [MapTo(typeof(UserDto))]
@@ -382,7 +382,7 @@ public sealed class User
 ```
 
 An invalid explicit path — a segment that doesn't exist, or an intermediate segment that's
-nullable (the same rule as above) — is reported as `GM021` rather than left unmapped with no
+nullable (the same rule as above) — is reported as `AM021` rather than left unmapped with no
 explanation. `[MapUsing]` is an alternative when the destination actually needs a *computed*
 value rather than just a different source property:
 
@@ -468,7 +468,7 @@ The two don't collide — internally each is keyed by its `destinationProperty` 
 `"Email"`), and every direction's resolver only ever looks up the one matching the property it's actually
 trying to fill in on *its own* destination type; the other entry just goes unused for that direction. But if
 you forget the second, oppositely-oriented `[MapProperty]`, the direction that's missing it doesn't error —
-it silently falls back to exact-name matching, finds nothing, and reports `GM001` instead of applying the
+it silently falls back to exact-name matching, finds nothing, and reports `AM001` instead of applying the
 rename you probably wanted on both sides.
 
 If the rename is symmetric — which it usually is, `Email` ↔ `EmailAddress` either way — this is more setup
@@ -518,8 +518,8 @@ Add this to your project to write the generated source to disk so you can read i
 </PropertyGroup>
 ```
 
-then look under `Generated/GeneratedMapper.Generator/.../GeneratedMappings.g.cs` after building.
-`samples/GeneratedMapper.Sample` in this repo already does this — it's a good place to see real
+then look under `Generated/AnvilMap.Generator/.../GeneratedMappings.g.cs` after building.
+`samples/AnvilMap.Sample` in this repo already does this — it's a good place to see real
 generated output for a project with nested objects, collections, conditions, and a SQL
 projection all together.
 
@@ -529,35 +529,35 @@ The generator reports build-time diagnostics instead of failing silently or thro
 
 | ID | Severity | Meaning |
 |---|---|---|
-| GM001 | Info | Destination property has no matching source and was left unmapped. Add `[MapProperty]` or `[MapIgnore]`. |
-| GM002 | Info | The SQL projection was skipped because the mapping graph is cyclic; the imperative method is still generated. |
-| GM003 | Error | Incompatible property types — no implicit conversion and no nested mapping declared. |
-| GM004 | Error | `[MapCondition]` references a method that doesn't exist or has the wrong signature. |
-| GM005 | Info | A `[MapCondition]`-gated property was left out of the SQL projection (still honored by the imperative mapper). |
-| GM006 | Warning | The destination has no usable constructor (no parameterless constructor, and no constructor whose parameters all resolve to already-mapped, unconditioned properties) — the mapping was skipped entirely. |
-| GM007 | Warning | `[MapCondition]` on an `init`-only destination property isn't supported — the property was left out. |
-| GM008 | Info | The two-argument `To{Dest}(source, destination)` overload was omitted because the destination has `init`-only properties. |
-| GM009 | Error | `[MapUsing]` references a method that doesn't exist or has the wrong signature/return type. |
-| GM010 | Warning | A destination property's name matched more than one valid naming-convention-flattening path — left unmapped rather than guessed. Add a `[MapProperty]` naming the specific dotted path (e.g. `"HomeAddress.City"`) to state which one. |
-| GM011 | Warning | The same source/destination pair was declared more than once (`[MapTo]` and/or `[MapFrom]`, including a `GenerateReverse`-implied pair colliding with an explicit declaration). Only the last one encountered is used. |
-| GM012 | Warning | A `[MapCondition]`, `[MapUsing]`, `[MapDefault]`, or `[MapProperty]` targets a property that a `[MapIgnore]` already excludes from this same mapping, so the configuration is never consulted. Remove it, or scope the `[MapIgnore]` to a different source type. |
-| GM013 | Error | A `required` destination property has no resolved mapping and was left unset — the generated method will fail to compile (`CS9035`). Add a matching source property, a `[MapProperty]` override, a `[MapDefault]`, or remove `required`. |
-| GM014 | Warning | A `[MapCondition]` targets a `required` destination property, which isn't supported — a required member can't be conditionally left unset. Remove the `[MapCondition]`, or remove `required` (reported alongside `GM013`, since the property ends up unmapped either way). |
-| GM015 | Warning | A `[MapIgnore(typeof(X))]` names a type that's never actually a source for this destination — likely a typo, or left behind after a rename. It has no effect. |
-| GM016 | Info | A property has redundant `[MapIgnore]` attributes — an unscoped one alongside a scoped one, or the same source type named more than once. |
-| GM017 | Warning | The same destination property is targeted by more than one `[MapProperty]`, `[MapCondition]`, `[MapUsing]`, or `[MapDefault]` in this mapping — only the last one encountered is used. Remove all but one, or make sure they agree. |
-| GM018 | Error | A `Nested`/`Enumerable` property's own mapping was itself skipped (e.g. by `GM006`), so there's no generated method to call — the generated code will fail to compile. Fix whatever skipped that mapping (see its own diagnostic), or add a `[MapIgnore]` here. |
-| GM019 | Warning | A `[MapDefault]` has no effect: it targets a nested/enumerable property, its value isn't a literal Roslyn can express as an attribute constant, or the property's type can't hold `null`. Remove it, or see `MapDefaultAttribute`'s documentation for what it supports. |
-| GM020 | Warning | `MaxDepth` has no effect: either the destination isn't built via plain mutable-property assignment (a positional record, or one with `init`-only properties, neither of which supports the depth-guard mechanism), or no property on the mapping is actually self-recursive. |
-| GM021 | Warning | An explicit `[MapProperty]` source name doesn't resolve — a plain name that isn't a top-level source property, a dotted path with a segment that doesn't exist, or one with a nullable intermediate segment. Check for a typo, or update the `[MapProperty]` if the source changed. |
+| AM001 | Info | Destination property has no matching source and was left unmapped. Add `[MapProperty]` or `[MapIgnore]`. |
+| AM002 | Info | The SQL projection was skipped because the mapping graph is cyclic; the imperative method is still generated. |
+| AM003 | Error | Incompatible property types — no implicit conversion and no nested mapping declared. |
+| AM004 | Error | `[MapCondition]` references a method that doesn't exist or has the wrong signature. |
+| AM005 | Info | A `[MapCondition]`-gated property was left out of the SQL projection (still honored by the imperative mapper). |
+| AM006 | Warning | The destination has no usable constructor (no parameterless constructor, and no constructor whose parameters all resolve to already-mapped, unconditioned properties) — the mapping was skipped entirely. |
+| AM007 | Warning | `[MapCondition]` on an `init`-only destination property isn't supported — the property was left out. |
+| AM008 | Info | The two-argument `To{Dest}(source, destination)` overload was omitted because the destination has `init`-only properties. |
+| AM009 | Error | `[MapUsing]` references a method that doesn't exist or has the wrong signature/return type. |
+| AM010 | Warning | A destination property's name matched more than one valid naming-convention-flattening path — left unmapped rather than guessed. Add a `[MapProperty]` naming the specific dotted path (e.g. `"HomeAddress.City"`) to state which one. |
+| AM011 | Warning | The same source/destination pair was declared more than once (`[MapTo]` and/or `[MapFrom]`, including a `GenerateReverse`-implied pair colliding with an explicit declaration). Only the last one encountered is used. |
+| AM012 | Warning | A `[MapCondition]`, `[MapUsing]`, `[MapDefault]`, or `[MapProperty]` targets a property that a `[MapIgnore]` already excludes from this same mapping, so the configuration is never consulted. Remove it, or scope the `[MapIgnore]` to a different source type. |
+| AM013 | Error | A `required` destination property has no resolved mapping and was left unset — the generated method will fail to compile (`CS9035`). Add a matching source property, a `[MapProperty]` override, a `[MapDefault]`, or remove `required`. |
+| AM014 | Warning | A `[MapCondition]` targets a `required` destination property, which isn't supported — a required member can't be conditionally left unset. Remove the `[MapCondition]`, or remove `required` (reported alongside `AM013`, since the property ends up unmapped either way). |
+| AM015 | Warning | A `[MapIgnore(typeof(X))]` names a type that's never actually a source for this destination — likely a typo, or left behind after a rename. It has no effect. |
+| AM016 | Info | A property has redundant `[MapIgnore]` attributes — an unscoped one alongside a scoped one, or the same source type named more than once. |
+| AM017 | Warning | The same destination property is targeted by more than one `[MapProperty]`, `[MapCondition]`, `[MapUsing]`, or `[MapDefault]` in this mapping — only the last one encountered is used. Remove all but one, or make sure they agree. |
+| AM018 | Error | A `Nested`/`Enumerable` property's own mapping was itself skipped (e.g. by `AM006`), so there's no generated method to call — the generated code will fail to compile. Fix whatever skipped that mapping (see its own diagnostic), or add a `[MapIgnore]` here. |
+| AM019 | Warning | A `[MapDefault]` has no effect: it targets a nested/enumerable property, its value isn't a literal Roslyn can express as an attribute constant, or the property's type can't hold `null`. Remove it, or see `MapDefaultAttribute`'s documentation for what it supports. |
+| AM020 | Warning | `MaxDepth` has no effect: either the destination isn't built via plain mutable-property assignment (a positional record, or one with `init`-only properties, neither of which supports the depth-guard mechanism), or no property on the mapping is actually self-recursive. |
+| AM021 | Warning | An explicit `[MapProperty]` source name doesn't resolve — a plain name that isn't a top-level source property, a dotted path with a segment that doesn't exist, or one with a nullable intermediate segment. Check for a typo, or update the `[MapProperty]` if the source changed. |
 
-GM001, GM004, and GM009 have one-click IDE code fixes available if you also reference
-`GeneratedMapper.CodeFixes`.
+AM001, AM004, and AM009 have one-click IDE code fixes available if you also reference
+`AnvilMap.CodeFixes`.
 
 ## Native AOT
 
 Everything generated is plain C# with no runtime reflection, so it publishes and runs correctly
-under `dotnet publish -p:PublishAot=true` — verified via `samples/GeneratedMapper.Sample.Aot`, a
+under `dotnet publish -p:PublishAot=true` — verified via `samples/AnvilMap.Sample.Aot`, a
 small console app published and actually run under Native AOT. See README.md's "Native AOT"
 section for the one caveat (a trim warning tied to the SQL-projection feature specifically) and
 how the generator handles it.

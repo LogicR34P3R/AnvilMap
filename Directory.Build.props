@@ -3,15 +3,15 @@
     <Authors>LogicR34P3R</Authors>
     <Company>LogicR34P3R</Company>
     <Version>1.0.0</Version>
-    <PackageProjectUrl>https://github.com/LogicR34P3R/GeneratedMapper</PackageProjectUrl>
-    <RepositoryUrl>https://github.com/LogicR34P3R/GeneratedMapper</RepositoryUrl>
+    <PackageProjectUrl>https://github.com/LogicR34P3R/AnvilMap</PackageProjectUrl>
+    <RepositoryUrl>https://github.com/LogicR34P3R/AnvilMap</RepositoryUrl>
     <RepositoryType>git</RepositoryType>
     <PublishRepositoryUrl>true</PublishRepositoryUrl>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
 
-    <!-- Only GeneratedMapper.Abstractions and GeneratedMapper.Generator are meant to be
+    <!-- Only AnvilMap.Abstractions and AnvilMap.Generator are meant to be
          published; every other project (samples, tests, benchmarks, code fixes) opts out here
-         so `dotnet pack GeneratedMapper.sln` can't accidentally produce a stray .nupkg for one
+         so `dotnet pack AnvilMap.sln` can't accidentally produce a stray .nupkg for one
          of them. -->
     <IsPackable>false</IsPackable>
   </PropertyGroup>

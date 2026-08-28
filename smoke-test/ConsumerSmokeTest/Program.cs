@@ -1,4 +1,4 @@
-using GeneratedMapper;
+using AnvilMap;
 
 var user = new User { Id = 1, Name = "Ada" };
 var dto = user.ToUserDto();
@@ -6,7 +6,7 @@ var dto = user.ToUserDto();
 if (dto.Id != 1 || dto.Name != "Ada")
     throw new InvalidOperationException($"Generated mapping produced wrong values: Id={dto.Id}, Name={dto.Name}");
 
-IMapper mapper = new GeneratedMapperService();
+IMapper mapper = new AnvilMapService();
 var viaMapper = mapper.Map<User, UserDto>(user);
 
 if (viaMapper.Id != 1 || viaMapper.Name != "Ada")
@@ -23,7 +23,7 @@ var employeeDto = employee.ToEmployeeDto();
 if (employeeDto.HomeCity != "Arlington")
     throw new InvalidOperationException($"Explicit dotted-path [MapProperty] produced wrong value: HomeCity={employeeDto.HomeCity}");
 
-Console.WriteLine("Smoke test passed: GeneratedMapper.Generator + GeneratedMapper.Abstractions work correctly from packed NuGet packages.");
+Console.WriteLine("Smoke test passed: AnvilMap.Generator + AnvilMap.Abstractions work correctly from packed NuGet packages.");
 
 [MapTo(typeof(UserDto), GenerateReverse = true)]
 public sealed class User

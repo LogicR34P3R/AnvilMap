@@ -1,0 +1,69 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>netstandard2.0</TargetFramework>
+    <LangVersion>latest</LangVersion>
+    <Nullable>enable</Nullable>
+    <IsRoslynComponent>true</IsRoslynComponent>
+    <EnforceExtendedAnalyzerRules>true</EnforceExtendedAnalyzerRules>
+
+    <IsPackable>true</IsPackable>
+    <PackageId>AnvilMap.Generator</PackageId>
+    <Description>Compile-time Roslyn incremental source generator for AnvilMap: emits object-to-object mapping methods (and EF Core-translatable SQL projections) from [MapTo] declarations, with no runtime reflection. Add this package to the project(s) containing your [MapTo]-annotated types; it pulls in AnvilMap.Abstractions automatically.</Description>
+    <PackageTags>mapping;object-mapping;source-generator;dto;mapper;roslyn;analyzer</PackageTags>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+
+    <!-- Deliberately NOT setting DevelopmentDependency=true here, despite this being an
+         analyzer-only package: confirmed empirically that it actively breaks consumption. NuGet's
+         *default* PrivateAssets ("contentfiles;build;analyzers") already keeps the analyzer from
+         flowing to a further downstream consumer, so DevelopmentDependency=true buys nothing
+         extra - but `dotnet add package`/Visual Studio auto-add PrivateAssets="all" plus a
+         trimmed IncludeAssets (missing "compile") on the CONSUMER's own <PackageReference> for
+         any package whose nuspec sets developmentDependency=true. That trimmed IncludeAssets
+         applies to the whole dependency subtree rooted at this reference - including the
+         transitive AnvilMap.Abstractions reference below - which silently strips
+         Abstractions' compile-time lib/ asset too, so a consumer's own code can't see
+         [MapTo]/IMapper at all despite everything restoring "successfully". Caught via a real
+         `dotnet add package` in a scratch project outside this solution, not just `dotnet build`
+         inside it.
+
+         This project's own build output is packed manually below into analyzers/dotnet/cs,
+         not into lib/ - there is no ordinary compile-time API surface to ship. -->
+    <IncludeBuildOutput>false</IncludeBuildOutput>
+    <!-- NU5128: "add lib or ref assemblies" - expected and correct for an analyzer-only
+         package; the analyzers/dotnet/cs payload below is the intentional replacement. -->
+    <NoWarn>$(NoWarn);NU5128</NoWarn>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="Microsoft.CodeAnalysis.CSharp" PrivateAssets="all" />
+
+    <!-- Deliberately no PrivateAssets here (unlike Microsoft.CodeAnalysis.CSharp above): the
+         generator/test host process needs the exact version this project was compiled against
+         actually loaded at runtime, and PrivateAssets="all" suppresses that from flowing to
+         AnvilMap.Generator.Tests/.CodeFixes.Tests (both reference this project directly,
+         not via the packed NuGet package) - confirmed empirically, not just reasoned about: with
+         PrivateAssets="all" here, all 96 generator tests failed with GeneratedSource == null
+         (a version mismatch silently kills the generator inside the test host). Left flowing as
+         a normal transitive dependency; the packed analyzers/dotnet/cs payload below only ever
+         contains this project's own DLL regardless, so this doesn't affect what the .nupkg ships. -->
+    <PackageReference Include="System.Collections.Immutable" />
+
+    <!-- Not referenced by any type in this project (GeneratorConstants.cs matches attributes by
+         name, deliberately, so this project never needs to load AnvilMap.Abstractions
+         itself) - present solely so `dotnet pack` translates it into a NuGet dependency on the
+         AnvilMap.Abstractions package, so installing this package pulls that one in too. -->
+    <ProjectReference Include="..\AnvilMap.Abstractions\AnvilMap.Abstractions.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <AdditionalFiles Include="AnalyzerReleases.Shipped.md" />
+    <AdditionalFiles Include="AnalyzerReleases.Unshipped.md" />
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="..\..\README.md" Pack="true" PackagePath="\" />
+    <None Include="$(OutputPath)\$(AssemblyName).dll" Pack="true" PackagePath="analyzers/dotnet/cs" Visible="false" />
+    <!-- Auto-configures InterceptorsNamespaces for any consumer of this package - see the
+         props file's own comment. Packed under buildTransitive (not just build) so the property
+         still flows if this package is ever referenced transitively through another one, not just
+         as a direct PackageReference. -->
+    <None Include="buildTransitive\AnvilMap.Generator.props" Pack="true" PackagePath="buildTransitive" />
+  </ItemGroup>
+</Project>

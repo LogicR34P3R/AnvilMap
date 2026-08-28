@@ -17,26 +17,26 @@ jobs:
       - name: Setup .NET
         uses: actions/setup-dotnet@v4
         with:
-          # 10.0.x, not 8.0.x: benchmarks/GeneratedMapper.Benchmarks multi-targets up to net10.0
+          # 10.0.x, not 8.0.x: benchmarks/AnvilMap.Benchmarks multi-targets up to net10.0
           # (a TFM the 8.0.x SDK doesn't recognize at all - a newer SDK can still build every
           # older TFM in this solution (netstandard2.0, net6.0, net8.0) without needing those
           # SDKs installed too, since TFM support comes from NuGet ref packs, not SDK version).
           dotnet-version: "10.0.x"
 
       - name: Restore
-        run: dotnet restore GeneratedMapper.sln
+        run: dotnet restore AnvilMap.sln
 
       - name: Verify code style
-        run: dotnet format style GeneratedMapper.sln --verify-no-changes --severity warn
+        run: dotnet format style AnvilMap.sln --verify-no-changes --severity warn
 
       - name: Build
-        run: dotnet build GeneratedMapper.sln -c Release --no-restore
+        run: dotnet build AnvilMap.sln -c Release --no-restore
 
       - name: Test
-        run: dotnet test GeneratedMapper.sln -c Release --no-build
+        run: dotnet test AnvilMap.sln -c Release --no-build
 
       - name: Pack
-        run: dotnet pack GeneratedMapper.sln -c Release --no-build -o ./nupkg-out
+        run: dotnet pack AnvilMap.sln -c Release --no-build -o ./nupkg-out
 
       # A successful `pack` alone doesn't prove the package actually works for a consumer - two
       # real bugs (an auto-applied consumer-side PrivateAssets/IncludeAssets restriction that hid
@@ -44,7 +44,7 @@ jobs:
       # above what Roslyn 4.8.0 itself depends on, breaking generator load in an older host) were
       # only caught by actually installing the packed .nupkg into a separate consumer project and
       # building/running it. smoke-test/ConsumerSmokeTest is a real,
-      # tracked, minimal console project kept outside GeneratedMapper.sln for exactly this: its
+      # tracked, minimal console project kept outside AnvilMap.sln for exactly this: its
       # nuget.config points at ../../nupkg-out (this step's output), so restoring it here
       # reproduces the same check on every push/PR.
       - name: Smoke-test packages from a separate consumer project

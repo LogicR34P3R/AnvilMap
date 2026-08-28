@@ -1,0 +1,16 @@
+<Project>
+  <!--
+    Interceptor-based direct dispatch is gated by the InterceptorsNamespaces compiler switch, not
+    by LangVersion - the compiler raises CS9137 for any [InterceptsLocation] application outside a
+    listed namespace. Auto-injecting it here means a consumer who just adds this package gets the
+    C# 14 fast path automatically once they're on a new-enough toolchain, with zero manual .csproj
+    edits.
+
+    Safe to set unconditionally regardless of the consumer's TargetFramework/LangVersion: it's a
+    no-op wherever the generator doesn't actually emit an [InterceptsLocation] attribute (gated
+    separately, per-consumer, on ConsumerCapabilities.UseCSharp14).
+  -->
+  <PropertyGroup>
+    <InterceptorsNamespaces>$(InterceptorsNamespaces);AnvilMap</InterceptorsNamespaces>
+  </PropertyGroup>
+</Project>
