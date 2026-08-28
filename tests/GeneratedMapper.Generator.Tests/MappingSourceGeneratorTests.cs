@@ -275,6 +275,54 @@ public sealed class BDto
     }
 
     [Fact]
+    public void NestedMappingSkippedByGM006_ReportsGM018InsteadOfGeneratingAnUncallableMethod()
+    {
+        // Address -> AddressDto matches Nested kind (the pair is declared), but AddressDto is a
+        // positional record whose only constructor parameter is gated by [MapCondition] -
+        // TryMatchConstructor excludes conditioned properties, so no constructor matches, there's
+        // no parameterless one either, and the whole mapping is dropped (GM006) - leaving
+        // User -> UserDto's Address property referencing a ToAddressDto() that's never emitted.
+        var result = GeneratorTestHelper.Run(@"
+using GeneratedMapper;
+
+namespace Sample;
+
+[MapTo(typeof(UserDto))]
+public sealed class User
+{
+    public Address Address { get; set; } = new();
+}
+
+[MapTo(typeof(AddressDto))]
+[MapCondition(typeof(AddressDto), nameof(AddressDto.City), nameof(ShouldMapCity))]
+public sealed class Address
+{
+    public string City { get; set; } = """";
+
+    public static bool ShouldMapCity(Address source) => true;
+}
+
+public sealed class UserDto
+{
+    public AddressDto Address { get; set; } = null!;
+}
+
+public sealed record AddressDto(string City);
+");
+
+        Assert.NotNull(result.GeneratedSource);
+        Assert.Contains(result.GeneratorDiagnostics, d => d.Id == "GM006");
+        Assert.Contains(result.GeneratorDiagnostics, d =>
+            d.Id == "GM018" && d.Severity == DiagnosticSeverity.Error &&
+            d.GetMessage().Contains("Address") && d.GetMessage().Contains("AddressDto"));
+
+        // Purely additive: GM018 explains the failure, it doesn't prevent it - the outer method
+        // still calls the never-generated ToAddressDto(), so this remains a genuine compile error.
+        Assert.DoesNotContain("ToAddressDto(this ", result.GeneratedSource);
+        Assert.Contains("source.Address.ToAddressDto()", result.GeneratedSource);
+    }
+
+    [Fact]
     public void IncompatibleTypes_ReportsGM003AndOmitsProperty()
     {
         var result = GeneratorTestHelper.Run(@"
@@ -1482,6 +1530,7 @@ public sealed class UserDto
         Assert.NotNull(result.GeneratedSource);
         Assert.Contains("destination.Name = source.Name;", result.GeneratedSource);
         Assert.DoesNotContain("??", result.GeneratedSource);
+        Assert.Contains(result.GeneratorDiagnostics, d => d.Id == "GM019" && d.Severity == DiagnosticSeverity.Warning && d.GetMessage().Contains("Name"));
         AssertNoCompileErrors(result);
     }
 
@@ -1508,6 +1557,7 @@ public sealed class UserDto
 
         Assert.NotNull(result.GeneratedSource);
         Assert.Contains("destination.Id = source.Id;", result.GeneratedSource);
+        Assert.Contains(result.GeneratorDiagnostics, d => d.Id == "GM019" && d.Severity == DiagnosticSeverity.Warning && d.GetMessage().Contains("Id"));
         AssertNoCompileErrors(result);
     }
 
@@ -1722,6 +1772,7 @@ public sealed class UserDto
 
         Assert.NotNull(result.GeneratedSource);
         Assert.Contains("destination.Address = source.Address.ToAddressDto();", result.GeneratedSource);
+        Assert.Contains(result.GeneratorDiagnostics, d => d.Id == "GM019" && d.Severity == DiagnosticSeverity.Warning && d.GetMessage().Contains("Address"));
         AssertNoCompileErrors(result);
     }
 

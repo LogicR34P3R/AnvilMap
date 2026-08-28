@@ -2,8 +2,8 @@ using Microsoft.CodeAnalysis;
 
 namespace GeneratedMapper.Generator;
 
-// GM001-GM010. IDs are assigned in implementation order, not renumbered (GM008 came after
-// GM009). IDs are never reused, only retired - see AnalyzerReleases.Shipped.md.
+// IDs are assigned in implementation order, not renumbered (GM008 came after GM009). IDs are
+// never reused, only retired - see AnalyzerReleases.Shipped.md.
 internal static class Diagnostics
 {
     public static readonly DiagnosticDescriptor UnmappedDestinationProperty = new(
@@ -138,6 +138,22 @@ internal static class Diagnostics
         id: "GM017",
         title: "Duplicate property-level attribute declaration",
         messageFormat: "The destination property '{0}' on '{1}' is targeted by {2} more than once in this mapping - only the last one encountered is used. Remove all but one, or make sure they agree.",
+        category: "GeneratedMapper",
+        defaultSeverity: DiagnosticSeverity.Warning,
+        isEnabledByDefault: true);
+
+    public static readonly DiagnosticDescriptor NestedMappingSkipped = new(
+        id: "GM018",
+        title: "Nested or element mapping was itself skipped",
+        messageFormat: "Property '{0}' on '{1}' -> '{2}' maps via a nested/element mapping from '{3}' to '{4}', but that mapping was itself skipped (see its own diagnostic, e.g. GM006) and has no generated method - the generated code for '{1}' -> '{2}' will fail to compile. Fix whatever skipped '{3}' -> '{4}', or add a [MapIgnore] to '{0}' here.",
+        category: "GeneratedMapper",
+        defaultSeverity: DiagnosticSeverity.Error,
+        isEnabledByDefault: true);
+
+    public static readonly DiagnosticDescriptor MapDefaultHasNoEffect = new(
+        id: "GM019",
+        title: "[MapDefault] has no effect here",
+        messageFormat: "The [MapDefault] for property '{0}' on '{1}' -> '{2}' has no effect: {3}. Remove it, or see MapDefaultAttribute's documentation for what it supports.",
         category: "GeneratedMapper",
         defaultSeverity: DiagnosticSeverity.Warning,
         isEnabledByDefault: true);

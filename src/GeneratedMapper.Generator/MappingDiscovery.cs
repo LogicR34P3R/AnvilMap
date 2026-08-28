@@ -161,7 +161,10 @@ internal static class MappingDiscovery
                 var destinationProperty = attribute.ConstructorArguments[1].Value?.ToString();
                 var literal = FormatDefaultValueLiteral(attribute.ConstructorArguments[2]);
 
-                if (!string.IsNullOrWhiteSpace(destinationProperty) && literal is not null)
+                // literal may be null here (an unformattable constant, e.g. an array or
+                // typeof(...)) - still recorded rather than dropped, so MappingResolver can
+                // report GM019 for it instead of treating it as if [MapDefault] were never there.
+                if (!string.IsNullOrWhiteSpace(destinationProperty))
                 {
                     explicitDefaults.Add(
                         new ExplicitDefaultMapping(destinationProperty!, literal));
@@ -198,9 +201,8 @@ internal static class MappingDiscovery
 
     // A [MapDefault] constant is limited to what Roslyn allows as an attribute argument:
     // numeric/string/bool/char/enum, or an array/typeof/Error TypedConstant that this doesn't
-    // attempt to format. Returning null for those means the [MapDefault] is silently skipped
-    // (MappingResolver only applies a default it actually has a literal for) rather than
-    // guessing at syntax that might not compile.
+    // attempt to format (rather than guessing at syntax that might not compile) - returns null
+    // for those, which MappingResolver still records and reports as GM019.
     private static string? FormatDefaultValueLiteral(TypedConstant constant)
     {
         if (constant.IsNull)
