@@ -63,6 +63,15 @@ public class PackagingTests
             // The analyzer payload itself must still be present too - this test should catch a
             // regression in either piece, not just the new props file.
             Assert.NotNull(archive.GetEntry("analyzers/dotnet/cs/AnvilMap.Generator.dll"));
+
+            // Codefixes ship in the same package, alongside the analyzer, so a consumer gets
+            // both from a single PackageReference.
+            Assert.NotNull(archive.GetEntry("analyzers/dotnet/cs/AnvilMap.CodeFixes.dll"));
+
+            var nuspecEntry = archive.Entries.Single(e => e.FullName.EndsWith(".nuspec"));
+            using var nuspecReader = new StreamReader(nuspecEntry.Open());
+            var nuspecContent = nuspecReader.ReadToEnd();
+            Assert.DoesNotContain("AnvilMap.CodeFixes", nuspecContent);
         }
         finally
         {
