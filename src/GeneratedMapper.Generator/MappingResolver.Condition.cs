@@ -25,7 +25,9 @@ internal static partial class MappingResolver
         Action<Diagnostic>? report)
     {
         if (!explicitConditions.TryGetValue(destinationProperty.Name, out var conditionName))
+        {
             return new ConditionResolution(true, null, false);
+        }
 
         var candidates = methodHost.GetMembers(conditionName)
             .OfType<IMethodSymbol>()
@@ -38,14 +40,18 @@ internal static partial class MappingResolver
             SymbolEqualityComparer.Default.Equals(m.Parameters[1].Type, destination));
 
         if (twoArg is not null)
+        {
             return new ConditionResolution(true, conditionName, true);
+        }
 
         var oneArg = candidates.FirstOrDefault(m =>
             m.Parameters.Length == 1 &&
             SymbolEqualityComparer.Default.Equals(m.Parameters[0].Type, source));
 
         if (oneArg is not null)
+        {
             return new ConditionResolution(true, conditionName, false);
+        }
 
         // Properties let GeneratedMapper.CodeFixes locate the method-host type (where the stub
         // is inserted) and the source type (the stub's required parameter type - these differ

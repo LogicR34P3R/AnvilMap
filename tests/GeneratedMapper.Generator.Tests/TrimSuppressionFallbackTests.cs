@@ -67,7 +67,9 @@ public sealed class UserDto
         for (var dir = new DirectoryInfo(AppContext.BaseDirectory); dir is not null; dir = dir.Parent!)
         {
             if (File.Exists(Path.Combine(dir.FullName, "GeneratedMapper.sln")))
+            {
                 return dir.FullName;
+            }
         }
 
         throw new InvalidOperationException("Could not find GeneratedMapper.sln walking up from " + AppContext.BaseDirectory);

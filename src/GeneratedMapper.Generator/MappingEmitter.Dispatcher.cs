@@ -54,7 +54,9 @@ internal static partial class MappingEmitter
             // Mirrors the imperative emitter: no two-arg overload for init-only destinations
             // (GM008), so there's nothing for this table to dispatch to.
             if (HasInitOnlyProperty(mapping))
+            {
                 continue;
+            }
 
             var source = mapping.Source.FullyQualifiedName;
             var destination = mapping.Destination.FullyQualifiedName;

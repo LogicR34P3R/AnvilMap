@@ -45,7 +45,9 @@ foreach (var blogDto in projectedBlogs)
     blogDto.PostCount = blogDto.Posts.Count;
     Console.WriteLine($"[projection] {blogDto.Title} by {blogDto.Author} ({blogDto.PostCount} posts)");
     foreach (var post in blogDto.Posts)
+    {
         Console.WriteLine($"    - {post.Headline}");
+    }
 }
 
 Console.WriteLine();
@@ -79,14 +81,18 @@ foreach (var post in entity.Posts)
 // ...but the SQL projection can't translate an arbitrary condition method, so it's excluded
 // there (GM005 at build time) and Body comes through for every row, draft or not.
 foreach (var post in projectedBlogs.SelectMany(b => b.Posts))
+{
     Console.WriteLine($"[projection] '{post.Headline}' -> Body='{post.Body}'");
+}
 
 Console.WriteLine();
 
 // PostDto.AuthorDisplayName has no matching top-level source property on Post - resolved by
 // naming-convention flattening against Post.Author.DisplayName (an EF Core owned type).
 foreach (var post in projectedBlogs.SelectMany(b => b.Posts))
+{
     Console.WriteLine($"[projection] '{post.Headline}' -> AuthorDisplayName='{post.AuthorDisplayName}'");
+}
 
 Console.WriteLine();
 
@@ -100,4 +106,6 @@ var projectedSummaries = db.Posts.ProjectToPostSummaryDto().ToList();
 Console.WriteLine("Generated SQL for ProjectToPostSummaryDto():");
 Console.WriteLine(db.Posts.ProjectToPostSummaryDto().ToQueryString());
 foreach (var s in projectedSummaries)
+{
     Console.WriteLine($"[projection] PostSummaryDto({s.Id}, '{s.Headline}')");
+}

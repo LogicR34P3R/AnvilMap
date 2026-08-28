@@ -194,10 +194,14 @@ internal static partial class MappingEmitter
         foreach (var property in properties)
         {
             if (!(property.DestinationIsInitOnly || property.DestinationIsRequired))
+            {
                 continue;
+            }
 
             if (exclude is not null && exclude.Contains(property.DestinationPropertyName))
+            {
                 continue;
+            }
 
             if (property.ConditionMethodName is not null)
             {
@@ -213,7 +217,9 @@ internal static partial class MappingEmitter
             var value = BuildValueExpression(property, useNullableReferenceTypes);
 
             if (value is not null)
+            {
                 assignments.Add($"{property.DestinationPropertyName} = {value}");
+            }
         }
 
         return assignments;
@@ -236,12 +242,16 @@ internal static partial class MappingEmitter
                 : BuildValueExpression(property, useNullableReferenceTypes);
 
             if (value is null)
+            {
                 continue;
+            }
 
             var guards = new List<string>();
 
             if (isRecursive)
+            {
                 guards.Add($"depth < {recursionContext!.MaxDepth}");
+            }
 
             if (property.ConditionMethodName is not null)
             {
@@ -325,13 +335,17 @@ internal static partial class MappingEmitter
     private static string? EmitEnumerableImperativeValue(PropertyMappingModel property)
     {
         if (property.ElementSourceType is null || property.ElementDestinationType is null)
+        {
             return null;
+        }
 
         var accessor = property.SourceIsNullable ? "?." : ".";
         var materialize = MaterializeCall(property.DestinationCollectionShape);
 
         if (property.ElementSourceType.FullyQualifiedName == property.ElementDestinationType.FullyQualifiedName)
+        {
             return $"source.{property.SourcePropertyName}{accessor}{materialize}";
+        }
 
         return $"source.{property.SourcePropertyName}{accessor}Select(x => x.To{property.ElementDestinationType.SimpleName}()).{materialize}";
     }

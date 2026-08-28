@@ -26,7 +26,9 @@ internal static class MappingDiscovery
         GeneratorAttributeSyntaxContext context, string mapAttributeName, bool declaringSideIsSource)
     {
         if (context.TargetSymbol is not INamedTypeSymbol declaringSymbol)
+        {
             return ImmutableArray<MappingDeclaration>.Empty;
+        }
 
         var mapAttributes = declaringSymbol.GetAttributes()
             .Where(a => a.AttributeClass?.ToDisplayString() == mapAttributeName)
@@ -57,7 +59,9 @@ internal static class MappingDiscovery
         {
             if (mapAttribute.ConstructorArguments.Length != 1 ||
                 mapAttribute.ConstructorArguments[0].Value is not INamedTypeSymbol otherSide)
+            {
                 continue;
+            }
 
             var explicitProperties = new List<ExplicitPropertyMapping>();
 
@@ -67,10 +71,14 @@ internal static class MappingDiscovery
                 // the generator runs on every keystroke.
                 if (attribute.ConstructorArguments.Length != 3 ||
                     attribute.ConstructorArguments[0].Value is not INamedTypeSymbol propertyOtherSide)
+                {
                     continue;
+                }
 
                 if (!SymbolEqualityComparer.Default.Equals(otherSide, propertyOtherSide))
+                {
                     continue;
+                }
 
                 var sourceProperty = attribute.ConstructorArguments[1].Value?.ToString();
                 var destinationProperty = attribute.ConstructorArguments[2].Value?.ToString();
@@ -89,10 +97,14 @@ internal static class MappingDiscovery
             {
                 if (attribute.ConstructorArguments.Length != 3 ||
                     attribute.ConstructorArguments[0].Value is not INamedTypeSymbol conditionOtherSide)
+                {
                     continue;
+                }
 
                 if (!SymbolEqualityComparer.Default.Equals(otherSide, conditionOtherSide))
+                {
                     continue;
+                }
 
                 var destinationProperty = attribute.ConstructorArguments[1].Value?.ToString();
                 var conditionMethod = attribute.ConstructorArguments[2].Value?.ToString();
@@ -111,10 +123,14 @@ internal static class MappingDiscovery
             {
                 if (attribute.ConstructorArguments.Length != 3 ||
                     attribute.ConstructorArguments[0].Value is not INamedTypeSymbol converterOtherSide)
+                {
                     continue;
+                }
 
                 if (!SymbolEqualityComparer.Default.Equals(otherSide, converterOtherSide))
+                {
                     continue;
+                }
 
                 var destinationProperty = attribute.ConstructorArguments[1].Value?.ToString();
                 var converterMethod = attribute.ConstructorArguments[2].Value?.ToString();
@@ -133,10 +149,14 @@ internal static class MappingDiscovery
             {
                 if (attribute.ConstructorArguments.Length != 3 ||
                     attribute.ConstructorArguments[0].Value is not INamedTypeSymbol defaultOtherSide)
+                {
                     continue;
+                }
 
                 if (!SymbolEqualityComparer.Default.Equals(otherSide, defaultOtherSide))
+                {
                     continue;
+                }
 
                 var destinationProperty = attribute.ConstructorArguments[1].Value?.ToString();
                 var literal = FormatDefaultValueLiteral(attribute.ConstructorArguments[2]);
@@ -184,10 +204,14 @@ internal static class MappingDiscovery
     private static string? FormatDefaultValueLiteral(TypedConstant constant)
     {
         if (constant.IsNull)
+        {
             return "null";
+        }
 
         if (constant.Kind == TypedConstantKind.Primitive)
+        {
             return SymbolDisplay.FormatPrimitive(constant.Value!, quoteStrings: true, useHexadecimalNumbers: false);
+        }
 
         if (constant.Kind == TypedConstantKind.Enum && constant.Type is INamedTypeSymbol enumType)
         {

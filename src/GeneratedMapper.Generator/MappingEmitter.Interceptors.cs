@@ -30,7 +30,9 @@ internal static partial class MappingEmitter
         // LanguageVersion, but emitting them for a consumer this flag says isn't ready risks
         // relying on toolchain behavior nothing here has verified.
         if (!capabilities.UseCSharp14 || interceptedCalls.Count == 0)
+        {
             return false;
+        }
 
         // Group by (source, destination, arg-shape) so every call site sharing the same shape
         // stacks onto one generated method via multiple [InterceptsLocation] attributes, rather
@@ -40,19 +42,28 @@ internal static partial class MappingEmitter
         foreach (var call in interceptedCalls)
         {
             if (!byPair.TryGetValue((call.SourceTypeName, call.DestinationTypeName), out var mapping))
+            {
                 continue; // No resolved mapping for this pair - leave it to the dictionary dispatcher.
+            }
 
             if (call.IsTwoArgOverload && HasInitOnlyProperty(mapping))
+            {
                 continue; // Mirrors _mapInto's own skip in MappingEmitter.Dispatcher.cs - no two-arg To{Dest}() exists to redirect to.
+            }
 
             var key = (call.SourceTypeName, call.DestinationTypeName, call.IsTwoArgOverload);
             if (!groups.TryGetValue(key, out var list))
+            {
                 groups[key] = list = new List<InterceptedMapCall>();
+            }
+
             list.Add(call);
         }
 
         if (groups.Count == 0)
+        {
             return false;
+        }
 
         sb.AppendLine();
         sb.AppendLine("    // Intercepts direct GeneratedMappings.Map<TSource,TDestination>(...) calls the generator");
@@ -69,7 +80,9 @@ internal static partial class MappingEmitter
             var destinationSimpleName = mapping.Destination.SimpleName;
 
             foreach (var call in group.Value)
+            {
                 sb.AppendLine($"        [System.Runtime.CompilerServices.InterceptsLocation({call.LocationVersion}, \"{call.LocationData}\")]");
+            }
 
             var methodName = $"Intercepted_{destinationSimpleName}_{index++}";
 

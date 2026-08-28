@@ -72,7 +72,9 @@ internal static class GeneratorTestHelper
             var emitResult = outputCompilation.Emit(stream);
 
             if (emitResult.Success)
+            {
                 assembly = Assembly.Load(stream.ToArray());
+            }
         }
 
         return new GeneratorTestResult(

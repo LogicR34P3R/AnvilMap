@@ -17,7 +17,9 @@ internal sealed class MappingGraph
         Insert(declaration, report);
 
         if (!declaration.GenerateReverse)
+        {
             return;
+        }
 
         // Not routed back through Add() - GenerateReverse itself is never true on a synthesized
         // reverse (see MappingDeclaration.ToReverse), so this can't recurse.

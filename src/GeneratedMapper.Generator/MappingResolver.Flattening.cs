@@ -53,7 +53,9 @@ internal static partial class MappingResolver
             // character starts a new PascalCase word - otherwise `prefix` couldn't stand alone
             // as a property name.
             if (i < remainingName.Length && !char.IsUpper(remainingName[i]))
+            {
                 continue;
+            }
 
             var prefix = remainingName.Substring(0, i);
 
@@ -62,7 +64,9 @@ internal static partial class MappingResolver
                 .FirstOrDefault(p => !p.IsStatic && p.GetMethod is not null);
 
             if (property is null)
+            {
                 continue;
+            }
 
             if (i == remainingName.Length)
             {
@@ -74,7 +78,9 @@ internal static partial class MappingResolver
 
             // An intermediate (non-terminal) segment must be non-nullable - see file header.
             if (IsNullableSegment(property.Type))
+            {
                 continue;
+            }
 
             currentPath.Add(property);
             FindPaths(property.Type, remainingName.Substring(i), currentPath, results);

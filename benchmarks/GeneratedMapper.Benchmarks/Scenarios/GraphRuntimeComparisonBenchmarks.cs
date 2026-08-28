@@ -36,7 +36,9 @@ public class GraphRuntimeComparisonBenchmarks
         {
             var comments = new List<GraphComment>(CommentsPerPost);
             for (var c = 0; c < CommentsPerPost; c++)
+            {
                 comments.Add(new GraphComment { Id = c, PostId = i, Author = "Reader", Text = "Nice post!" });
+            }
 
             posts.Add(new GraphPost { Id = i, BlogId = 1, Headline = $"Post {i}", Comments = comments });
         }
