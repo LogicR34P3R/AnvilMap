@@ -1,7 +1,7 @@
 ; Shipped analyzer releases
 ; https://github.com/dotnet/roslyn-analyzers/blob/main/src/Microsoft.CodeAnalysis.Analyzers/ReleaseTrackingAnalyzers.Help.md
 
-## Release 0.1.0
+## Release 1.0.0
 
 ### New Rules
 
@@ -16,13 +16,6 @@ GM006 | GeneratedMapper | Warning | Destination has no accessible parameterless 
 GM007 | GeneratedMapper | Warning | [MapCondition] on an init-only destination property is not supported
 GM008 | GeneratedMapper | Info | Two-argument mapper omitted for init-only destination
 GM009 | GeneratedMapper | Error | Converter method not found or has an invalid signature
-
-## Release 1.0.0
-
-### New Rules
-
-Rule ID | Category | Severity | Notes
---------|----------|----------|-------
 GM010 | GeneratedMapper | Warning | Ambiguous naming-convention flattening match
 GM011 | GeneratedMapper | Warning | Duplicate mapping declaration
 GM012 | GeneratedMapper | Warning | An attribute override targets a property excluded by [MapIgnore]
