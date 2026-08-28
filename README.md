@@ -1,5 +1,8 @@
 # GeneratedMapper
 
+[![CI](https://github.com/LogicR34P3R/GeneratedMapper/actions/workflows/ci.yml/badge.svg)](https://github.com/LogicR34P3R/GeneratedMapper/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+
 Source-generator-based mapper: compile-time replacement for runtime reflection-based mappers, for mapping between database entities and view models, with EF Core-translatable SQL projection.
 
 New here? See [USAGE.md](USAGE.md) for an installation-to-first-mapping walkthrough. The rest of this file is the attribute-by-attribute reference.
