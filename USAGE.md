@@ -7,26 +7,18 @@ ground task-by-task instead.
 
 ## Installing
 
-AnvilMap isn't published to nuget.org yet. Until it is, you have two ways to consume it:
-
-**From a locally built package** (recommended if you just want to try it):
+AnvilMap is published on nuget.org: [AnvilMap.Generator](https://www.nuget.org/packages/AnvilMap.Generator).
 
 ```
-dotnet pack AnvilMap.sln -c Release -o ./nupkg-out
-```
-
-then add a `nuget.config` pointing at that folder in your own project and
-
-```
-dotnet add package AnvilMap.Generator --version 1.0.0
+dotnet add package AnvilMap.Generator
 ```
 
 This one package pulls in `AnvilMap.Abstractions` automatically — you don't need to
-reference it separately. See `smoke-test/ConsumerSmokeTest` in this repo for a working example
-of exactly this setup.
+reference it separately.
 
 **As a project reference**, if you're working inside a solution that already contains
-AnvilMap's source (e.g. you cloned this repo alongside your own project):
+AnvilMap's source instead (e.g. you cloned this repo alongside your own project, or want to
+track an unreleased change):
 
 ```xml
 <ItemGroup>
@@ -36,9 +28,6 @@ AnvilMap's source (e.g. you cloned this repo alongside your own project):
                     ReferenceOutputAssembly="false" />
 </ItemGroup>
 ```
-
-Once nuget.org publishing happens, this section will just say `dotnet add package
-AnvilMap.Generator`.
 
 ## Quick start
 

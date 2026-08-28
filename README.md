@@ -1,6 +1,7 @@
 # AnvilMap
 
 [![CI](https://github.com/LogicR34P3R/AnvilMap/actions/workflows/ci.yml/badge.svg)](https://github.com/LogicR34P3R/AnvilMap/actions/workflows/ci.yml)
+[![NuGet](https://img.shields.io/nuget/v/AnvilMap.Generator.svg)](https://www.nuget.org/packages/AnvilMap.Generator)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
 Source-generator-based mapper: compile-time replacement for runtime reflection-based mappers, for mapping between database entities and view models, with EF Core-translatable SQL projection.
