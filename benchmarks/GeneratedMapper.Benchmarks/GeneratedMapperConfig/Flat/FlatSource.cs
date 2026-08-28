@@ -1,5 +1,3 @@
-using GeneratedMapper;
-
 namespace GeneratedMapper.Benchmarks.Models;
 
 // GenerateReverse feeds ReverseMappingBenchmarks (GeneratedMapper's reverse-generation

@@ -1,8 +1,4 @@
-using System;
-using System.Linq;
-using System.IO;
 using System.Reflection;
-using GeneratedMapper.Generator;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 

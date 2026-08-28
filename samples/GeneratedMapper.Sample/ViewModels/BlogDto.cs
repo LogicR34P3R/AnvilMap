@@ -1,6 +1,3 @@
-using System.Collections.Generic;
-using GeneratedMapper;
-
 namespace GeneratedMapper.Sample.ViewModels;
 
 public sealed class BlogDto

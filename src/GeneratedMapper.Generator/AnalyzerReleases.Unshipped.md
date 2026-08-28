@@ -16,3 +16,4 @@ GM017 | GeneratedMapper | Warning | Duplicate property-level attribute declarati
 GM018 | GeneratedMapper | Error | Nested or element mapping was itself skipped
 GM019 | GeneratedMapper | Warning | [MapDefault] has no effect here
 GM020 | GeneratedMapper | Warning | [MaxDepth] has no effect here
+GM021 | GeneratedMapper | Warning | [MapProperty] source doesn't exist

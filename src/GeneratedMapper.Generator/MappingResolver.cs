@@ -184,16 +184,31 @@ internal static partial class MappingResolver
 
             IPropertySymbol? sourceProperty = null;
             string? flattenedSourcePath = null;
+            string? explicitPathFailureReason = null;
 
             if (sourceProperties.TryGetValue(sourceName, out var directMatch))
             {
                 sourceProperty = directMatch;
             }
+            else if (hasExplicitOverride && sourceName!.Contains('.'))
+            {
+                // An explicit [MapProperty] naming a dotted path - every segment is already
+                // given literally, so this walks it directly rather than searching PascalCase
+                // split points like TryResolveFlattenedPath does for the default name-matching
+                // path below.
+                var path = TryResolveExplicitPath(source, sourceName, out explicitPathFailureReason);
+
+                if (path is not null)
+                {
+                    sourceProperty = path[path.Count - 1];
+                    flattenedSourcePath = sourceName;
+                }
+            }
             else if (!hasExplicitOverride)
             {
                 // Naming-convention flattening fallback - only for the default name-matching
-                // path, never for an explicit [MapProperty] override (that name must still be an
-                // exact top-level property name).
+                // path; an explicit [MapProperty] naming a single (non-dotted) segment must
+                // still be an exact top-level property name, handled above.
                 var path = TryResolveFlattenedPath(source, destinationProperty.Name, out var ambiguous);
 
                 if (ambiguous)
@@ -215,11 +230,25 @@ internal static partial class MappingResolver
 
             if (sourceProperty is null)
             {
-                report?.Invoke(Diagnostic.Create(
-                    Diagnostics.UnmappedDestinationProperty,
-                    destinationProperty.Locations.FirstOrDefault() ?? Location.None,
-                    destinationProperty.Name,
-                    destination.ToDisplayString()));
+                if (hasExplicitOverride)
+                {
+                    report?.Invoke(Diagnostic.Create(
+                        Diagnostics.MapPropertySourceNotFound,
+                        destinationProperty.Locations.FirstOrDefault() ?? Location.None,
+                        destinationProperty.Name,
+                        source.ToDisplayString(),
+                        sourceName!,
+                        explicitPathFailureReason ?? $"'{source.ToDisplayString()}' has no accessible property called '{sourceName}'"));
+                }
+                else
+                {
+                    report?.Invoke(Diagnostic.Create(
+                        Diagnostics.UnmappedDestinationProperty,
+                        destinationProperty.Locations.FirstOrDefault() ?? Location.None,
+                        destinationProperty.Name,
+                        destination.ToDisplayString()));
+                }
+
                 continue;
             }
 

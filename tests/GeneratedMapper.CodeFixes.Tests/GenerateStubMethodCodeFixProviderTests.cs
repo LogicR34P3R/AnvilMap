@@ -1,5 +1,3 @@
-using System.Threading.Tasks;
-
 namespace GeneratedMapper.CodeFixes.Tests;
 
 public class GenerateStubMethodCodeFixProviderTests

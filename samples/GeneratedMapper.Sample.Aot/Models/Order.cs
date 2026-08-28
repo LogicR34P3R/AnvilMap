@@ -1,6 +1,3 @@
-using System.Collections.Generic;
-using System.Linq;
-using GeneratedMapper;
 using GeneratedMapper.Sample.Aot.ViewModels;
 
 namespace GeneratedMapper.Sample.Aot.Models;
@@ -8,6 +5,7 @@ namespace GeneratedMapper.Sample.Aot.Models;
 [MapTo(typeof(OrderDto))]
 [MapCondition(typeof(OrderDto), nameof(OrderDto.InternalNotes), nameof(ShouldMapInternalNotes))]
 [MapUsing(typeof(OrderDto), nameof(OrderDto.Total), nameof(ComputeTotal))]
+[MapProperty(typeof(OrderDto), "Customer.Email", nameof(OrderDto.CustomerEmail))]
 public sealed class Order
 {
     public int Id { get; set; }

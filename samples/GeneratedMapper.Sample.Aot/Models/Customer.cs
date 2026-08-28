@@ -1,4 +1,3 @@
-using GeneratedMapper;
 using GeneratedMapper.Sample.Aot.ViewModels;
 
 namespace GeneratedMapper.Sample.Aot.Models;

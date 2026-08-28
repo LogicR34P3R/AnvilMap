@@ -1,5 +1,3 @@
-using GeneratedMapper;
-
 namespace GeneratedMapper.InterceptorSmokeTests;
 
 [MapTo(typeof(WidgetDto))]

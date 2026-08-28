@@ -1,4 +1,3 @@
-using AutoMapper;
 using GeneratedMapper.Benchmarks.AutoMapperConfig;
 using GeneratedMapper.Benchmarks.Models;
 

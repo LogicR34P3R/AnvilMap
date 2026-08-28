@@ -81,7 +81,7 @@ internal static class Diagnostics
     public static readonly DiagnosticDescriptor AmbiguousFlattenedMapping = new(
         id: "GM010",
         title: "Ambiguous naming-convention flattening match",
-        messageFormat: "Destination property '{0}' on '{1}' has no matching source property, and its name matches more than one possible chain of nested source properties (naming-convention flattening), so it was left unmapped rather than guessing. Add a [MapProperty] to state which one, or [MapIgnore] to silence this.",
+        messageFormat: "Destination property '{0}' on '{1}' has no matching source property, and its name matches more than one possible chain of nested source properties (naming-convention flattening), so it was left unmapped rather than guessing. Add a [MapProperty] naming the specific dotted path (e.g. \"HomeAddress.City\") to state which one, or [MapIgnore] to silence this.",
         category: "GeneratedMapper",
         defaultSeverity: DiagnosticSeverity.Warning,
         isEnabledByDefault: true);
@@ -162,6 +162,14 @@ internal static class Diagnostics
         id: "GM020",
         title: "[MaxDepth] has no effect here",
         messageFormat: "The MaxDepth on '{0}' -> '{1}' has no effect: {2}. Remove it, or see MapToAttribute.MaxDepth's documentation for what it guards against.",
+        category: "GeneratedMapper",
+        defaultSeverity: DiagnosticSeverity.Warning,
+        isEnabledByDefault: true);
+
+    public static readonly DiagnosticDescriptor MapPropertySourceNotFound = new(
+        id: "GM021",
+        title: "[MapProperty] source doesn't exist",
+        messageFormat: "The [MapProperty] on '{1}' for destination property '{0}' names '{2}' as the source, but {3}. '{0}' was left at its default value - check for a typo, or update the [MapProperty] if the source was renamed.",
         category: "GeneratedMapper",
         defaultSeverity: DiagnosticSeverity.Warning,
         isEnabledByDefault: true);
