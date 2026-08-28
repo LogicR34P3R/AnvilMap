@@ -61,10 +61,14 @@ internal static partial class MappingResolver
         foreach (var destinationProperty in destination.GetMembers().OfType<IPropertySymbol>())
         {
             if (destinationProperty.IsStatic)
+            {
                 continue;
+            }
 
             if (destinationProperty.SetMethod is null)
+            {
                 continue;
+            }
 
             var mapIgnoreAttributes = destinationProperty.GetAttributes()
                 .Where(a => a.AttributeClass?.ToDisplayString() == GeneratorConstants.MapIgnoreAttribute)
@@ -86,16 +90,24 @@ internal static partial class MappingResolver
                 var deadOverrides = new List<string>(4);
 
                 if (explicitConditions.ContainsKey(destinationProperty.Name))
+                {
                     deadOverrides.Add("[MapCondition]");
+                }
 
                 if (explicitConverters.ContainsKey(destinationProperty.Name))
+                {
                     deadOverrides.Add("[MapUsing]");
+                }
 
                 if (explicitDefaults.ContainsKey(destinationProperty.Name))
+                {
                     deadOverrides.Add("[MapDefault]");
+                }
 
                 if (explicitMappings.ContainsKey(destinationProperty.Name))
+                {
                     deadOverrides.Add("[MapProperty]");
+                }
 
                 if (deadOverrides.Count > 0)
                 {
@@ -116,13 +128,17 @@ internal static partial class MappingResolver
                 var converter = ResolveConverter(compilation, declaration.MethodHostSymbol, source, destinationProperty, converterMethodName, report);
 
                 if (converter is null)
+                {
                     continue;
+                }
 
                 // [MapCondition] can still gate a [MapUsing]-converted property; independent.
                 var converterCondition = ResolveCondition(declaration.MethodHostSymbol, source, destination, destinationProperty, explicitConditions, report);
 
                 if (!converterCondition.Success)
+                {
                     continue;
+                }
 
                 // A 'required' member has to be set unconditionally wherever the destination is
                 // constructed (object-initializer/constructor-call), so a condition that might
@@ -231,7 +247,9 @@ internal static partial class MappingResolver
             var condition = ResolveCondition(declaration.MethodHostSymbol, source, destination, destinationProperty, explicitConditions, report);
 
             if (!condition.Success)
+            {
                 continue;
+            }
 
             var conditionMethodName = condition.MethodName;
             var conditionAcceptsDestination = condition.AcceptsDestination;
@@ -292,7 +310,9 @@ internal static partial class MappingResolver
         foreach (var destinationProperty in destination.GetMembers().OfType<IPropertySymbol>())
         {
             if (destinationProperty.IsStatic || destinationProperty.SetMethod is null)
+            {
                 continue;
+            }
 
             if (destinationProperty.IsRequired && !mappedPropertyNames.Contains(destinationProperty.Name))
             {
@@ -338,7 +358,9 @@ internal static partial class MappingResolver
         foreach (var group in grouped)
         {
             if (group.Count() <= 1)
+            {
                 continue;
+            }
 
             report?.Invoke(Diagnostic.Create(
                 Diagnostics.DuplicatePropertyAttribute,
@@ -390,7 +412,9 @@ internal static partial class MappingResolver
             }
 
             if (isMatch)
+            {
                 return parameterNames;
+            }
         }
 
         return null;
@@ -411,7 +435,9 @@ internal static partial class MappingResolver
         var name = type.MetadataName;
 
         for (var containing = type.ContainingType; containing is not null; containing = containing.ContainingType)
+        {
             name = containing.MetadataName + "+" + name;
+        }
 
         return type.ContainingNamespace is { IsGlobalNamespace: false } ns
             ? ns.ToDisplayString() + "." + name

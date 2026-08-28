@@ -1,0 +1,5 @@
+root = true
+
+[*.cs]
+# Always use block braces for if/else/for/foreach/while/using, even for single statements.
+csharp_prefer_braces = true:warning

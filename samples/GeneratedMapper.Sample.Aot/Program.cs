@@ -84,5 +84,7 @@ static void Verify(string via, OrderDto dto, Order source, bool checkConditioned
 static void Assert(bool condition, string what)
 {
     if (!condition)
+    {
         throw new InvalidOperationException($"Native AOT verification failed: {what}");
+    }
 }

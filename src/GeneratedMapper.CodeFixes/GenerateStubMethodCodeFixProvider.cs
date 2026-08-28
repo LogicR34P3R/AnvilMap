@@ -36,21 +36,21 @@ public sealed class GenerateStubMethodCodeFixProvider : CodeFixProvider
     {
         var diagnostic = context.Diagnostics[0];
 
-        if (!diagnostic.Properties.TryGetValue("MethodHostMetadataName", out var methodHostMetadataName) || methodHostMetadataName is null)
+        if (!diagnostic.Properties.TryGetValue("MethodHostMetadataName", out var methodHostMetadataName) || methodHostMetadataName is null ||
+            !diagnostic.Properties.TryGetValue("SourceMetadataName", out var sourceMetadataName) || sourceMetadataName is null ||
+            !diagnostic.Properties.TryGetValue("MethodName", out var methodName) || methodName is null)
+        {
             return Task.CompletedTask;
-
-        if (!diagnostic.Properties.TryGetValue("SourceMetadataName", out var sourceMetadataName) || sourceMetadataName is null)
-            return Task.CompletedTask;
-
-        if (!diagnostic.Properties.TryGetValue("MethodName", out var methodName) || methodName is null)
-            return Task.CompletedTask;
+        }
 
         var returnType = diagnostic.Id == ConditionDiagnosticId
             ? "bool"
             : diagnostic.Properties.TryGetValue("ReturnType", out var rt) ? rt : null;
 
         if (returnType is null)
+        {
             return Task.CompletedTask;
+        }
 
         context.RegisterCodeFix(
             CodeAction.Create(
@@ -72,11 +72,15 @@ public sealed class GenerateStubMethodCodeFixProvider : CodeFixProvider
         var syntaxRef = methodHostType?.DeclaringSyntaxReferences.FirstOrDefault();
 
         if (syntaxRef is null || sourceType is null)
+        {
             return solution;
+        }
 
         var hostDocument = solution.GetDocument(syntaxRef.SyntaxTree);
         if (hostDocument is null)
+        {
             return solution;
+        }
 
         var root = await hostDocument.GetSyntaxRootAsync(ct).ConfigureAwait(false);
         var typeDecl = (TypeDeclarationSyntax)await syntaxRef.GetSyntaxAsync(ct).ConfigureAwait(false);

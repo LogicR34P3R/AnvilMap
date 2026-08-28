@@ -18,7 +18,9 @@ internal static partial class MappingResolver
         ITypeSymbol destination)
     {
         if (SymbolEqualityComparer.Default.Equals(source, destination))
+        {
             return new KindResolution(PropertyMappingKind.Direct, null, null);
+        }
 
         if (TryGetEnumerableElement(source, out var sourceElement) &&
             TryGetEnumerableElement(destination, out var destinationElement))
@@ -26,7 +28,9 @@ internal static partial class MappingResolver
             var destinationShape = DetermineCollectionShape(destination);
 
             if (SymbolEqualityComparer.Default.Equals(sourceElement, destinationElement))
+            {
                 return new KindResolution(PropertyMappingKind.Enumerable, sourceElement, destinationElement, destinationShape);
+            }
 
             if (TryGetNamedType(sourceElement, out var sourceElementNamed) &&
                 TryGetNamedType(destinationElement, out var destinationElementNamed) &&
@@ -53,7 +57,9 @@ internal static partial class MappingResolver
         {
             var conversion = csharpCompilation.ClassifyConversion(source, destination);
             if (conversion.IsImplicit)
+            {
                 return new KindResolution(PropertyMappingKind.Direct, null, null);
+            }
         }
 
         return new KindResolution(null, null, null);
@@ -70,16 +76,22 @@ internal static partial class MappingResolver
     private static CollectionShape DetermineCollectionShape(ITypeSymbol type)
     {
         if (type is IArrayTypeSymbol)
+        {
             return CollectionShape.Array;
+        }
 
         if (type is INamedTypeSymbol { IsGenericType: true } named &&
             named.Name is "HashSet" or "ISet" or "IReadOnlySet")
+        {
             return CollectionShape.HashSet;
+        }
 
         foreach (var iface in type.AllInterfaces)
         {
             if (iface.Name is "ISet" or "IReadOnlySet")
+            {
                 return CollectionShape.HashSet;
+            }
         }
 
         return CollectionShape.List;

@@ -66,7 +66,9 @@ internal static partial class MappingEmitter
         var pairKey = (mapping.Source.FullyQualifiedName, mapping.Destination.FullyQualifiedName);
 
         if (!visiting.Add(pairKey))
+        {
             return null;
+        }
 
         // Non-null only for a destination without a parameterless constructor (e.g. a
         // positional record) - see MappingResolver.TryMatchConstructor. Every name in it is
@@ -119,12 +121,18 @@ internal static partial class MappingEmitter
             // Set only for Direct/Converted (see PropertyMappingModel) - [MapDefault]'s
             // substitute value. `??` is Expression.Coalesce, translated as SQL COALESCE.
             if (property.DefaultValueLiteral is not null)
+            {
                 valueExpr = $"{valueExpr} ?? {property.DefaultValueLiteral}";
+            }
 
             if (constructorSet is not null && constructorSet.Contains(property.DestinationPropertyName))
+            {
                 valueByProperty[property.DestinationPropertyName] = valueExpr;
+            }
             else
+            {
                 assignments.Add($"{property.DestinationPropertyName} = {valueExpr}");
+            }
         }
 
         visiting.Remove(pairKey);
@@ -132,14 +140,20 @@ internal static partial class MappingEmitter
         // A trailing `{ Prop = value }` block is what compiles to Expression.Bind calls; a pure
         // Expression.New(ctor, args) with none left over doesn't, so needs no trim protection.
         if (assignments.Count > 0)
+        {
             destinationTypesUsingBind.Add(mapping.Destination.FullyQualifiedName);
+        }
 
         if (constructorSet is null)
+        {
             return $"new {mapping.Destination.FullyQualifiedName} {{ {string.Join(", ", assignments)} }}";
+        }
 
         var constructorArgs = new List<string>(mapping.ConstructorParameterProperties!.Count);
         foreach (var name in mapping.ConstructorParameterProperties!)
+        {
             constructorArgs.Add(valueByProperty[name]);
+        }
 
         var constructorCall = $"new {mapping.Destination.FullyQualifiedName}({string.Join(", ", constructorArgs)})";
         return assignments.Count > 0 ? $"{constructorCall} {{ {string.Join(", ", assignments)} }}" : constructorCall;
@@ -154,7 +168,9 @@ internal static partial class MappingEmitter
         System.Action<Diagnostic>? report)
     {
         if (!byPair.TryGetValue((property.SourceType.FullyQualifiedName, property.DestinationType.FullyQualifiedName), out var nested))
+        {
             return null;
+        }
 
         return BuildProjectionInitializer(nested, byPair, sourceExpr, visiting, destinationTypesUsingBind, report);
     }
@@ -168,7 +184,9 @@ internal static partial class MappingEmitter
         System.Action<Diagnostic>? report)
     {
         if (property.ElementSourceType is null || property.ElementDestinationType is null)
+        {
             return null;
+        }
 
         var elementAccess = $"{outerSourceExpr}.{property.SourcePropertyName}";
         var materialize = MaterializeCall(property.DestinationCollectionShape);
@@ -176,17 +194,23 @@ internal static partial class MappingEmitter
         // Same element type on both sides: no `.Select(...)` projection needed, just
         // materialize the source collection directly into the destination's shape.
         if (property.ElementSourceType.FullyQualifiedName == property.ElementDestinationType.FullyQualifiedName)
+        {
             return $"{elementAccess}.{materialize}";
+        }
 
         if (!byPair.TryGetValue(
                 (property.ElementSourceType.FullyQualifiedName, property.ElementDestinationType.FullyQualifiedName),
                 out var elementMapping))
+        {
             return null;
+        }
 
         var elementInitializer = BuildProjectionInitializer(elementMapping, byPair, "x", visiting, destinationTypesUsingBind, report);
 
         if (elementInitializer is null)
+        {
             return null;
+        }
 
         return $"{elementAccess}.Select(x => {elementInitializer}).{materialize}";
     }

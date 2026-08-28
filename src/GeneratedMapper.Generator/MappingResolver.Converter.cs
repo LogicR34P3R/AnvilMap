@@ -40,7 +40,9 @@ internal static partial class MappingResolver
         }
 
         if (match is not null)
+        {
             return converterMethodName;
+        }
 
         report?.Invoke(Diagnostic.Create(
             Diagnostics.ConverterMethodNotFound,

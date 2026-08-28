@@ -78,13 +78,17 @@ public sealed class MappingSourceGenerator : IIncrementalGenerator
             var ((compilation, allDeclarations), interceptedCallSites) = combinedPair;
 
             if (allDeclarations.IsDefaultOrEmpty)
+            {
                 return;
+            }
 
             // Stage 2 - graph construction: every declaration (plus its reverse, if declared)
             // goes into one MappingGraph before resolution starts.
             var graph = new MappingGraph();
             foreach (var declaration in allDeclarations)
+            {
                 graph.Add(declaration, spc.ReportDiagnostic);
+            }
 
             // [MapIgnore] correctness checks that need every declaration targeting a given
             // destination at once (a stale/typo'd source type, or a redundant combination) -
@@ -183,9 +187,14 @@ public sealed class MappingSourceGenerator : IIncrementalGenerator
         var sourceType = ctx.SemanticModel.GetTypeInfo(typeArguments[0], ct).Type;
         var destinationType = ctx.SemanticModel.GetTypeInfo(typeArguments[1], ct).Type;
         if (sourceType is null or IErrorTypeSymbol || destinationType is null or IErrorTypeSymbol)
+        {
             return null;
+        }
+
         if (sourceType.TypeKind == TypeKind.TypeParameter || destinationType.TypeKind == TypeKind.TypeParameter)
+        {
             return null;
+        }
 
         // Defensive, not just assumed safe: this exact API's null/throw behavior for an
         // uninterceptable location wasn't independently verified for every edge case, only for the
@@ -201,7 +210,9 @@ public sealed class MappingSourceGenerator : IIncrementalGenerator
         }
 
         if (location is null)
+        {
             return null;
+        }
 
         return new InterceptedMapCall(
             sourceType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat),

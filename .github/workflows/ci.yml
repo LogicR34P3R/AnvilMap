@@ -26,6 +26,9 @@ jobs:
       - name: Restore
         run: dotnet restore GeneratedMapper.sln
 
+      - name: Verify code style
+        run: dotnet format style GeneratedMapper.sln --verify-no-changes --severity warn
+
       - name: Build
         run: dotnet build GeneratedMapper.sln -c Release --no-restore
 

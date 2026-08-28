@@ -73,7 +73,9 @@ internal static class CodeFixTestHelper
                 $"No {diagnosticId} diagnostic was reported. Reported: {string.Join(", ", runResult.Diagnostics.Select(d => d.Id))}");
 
         if (!treeToDocument.TryGetValue(diagnostic.Location.SourceTree!, out var diagnosticDocument))
+        {
             throw new InvalidOperationException($"{diagnosticId}'s location doesn't belong to any test document.");
+        }
 
         CodeAction? registeredAction = null;
         var context = new CodeFixContext(
@@ -85,7 +87,9 @@ internal static class CodeFixTestHelper
         await provider.RegisterCodeFixesAsync(context).ConfigureAwait(false);
 
         if (registeredAction is null)
+        {
             throw new InvalidOperationException($"{provider.GetType().Name} did not register a fix for {diagnosticId}.");
+        }
 
         var operations = await registeredAction.GetOperationsAsync(CancellationToken.None).ConfigureAwait(false);
         var applyOperation = operations.OfType<ApplyChangesOperation>().Single();

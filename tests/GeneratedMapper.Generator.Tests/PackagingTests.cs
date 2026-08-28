@@ -78,10 +78,14 @@ public class PackagingTests
     {
         var dir = new DirectoryInfo(AppContext.BaseDirectory);
         while (dir is not null && !File.Exists(Path.Combine(dir.FullName, "GeneratedMapper.sln")))
+        {
             dir = dir.Parent;
+        }
 
         if (dir is null)
+        {
             throw new InvalidOperationException("Could not locate GeneratedMapper.sln by walking up from " + AppContext.BaseDirectory);
+        }
 
         return dir.FullName;
     }

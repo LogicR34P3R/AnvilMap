@@ -14,7 +14,9 @@ internal static class MapIgnoreValidation
     public static void Validate(MappingGraph graph, Action<Diagnostic>? report)
     {
         if (report is null)
+        {
             return;
+        }
 
         var sourcesByDestination = new Dictionary<INamedTypeSymbol, HashSet<INamedTypeSymbol>>(SymbolEqualityComparer.Default);
 
@@ -41,7 +43,9 @@ internal static class MapIgnoreValidation
                     .ToArray();
 
                 if (mapIgnoreAttributes.Length == 0)
+                {
                     continue;
+                }
 
                 ValidateStaleSourceTypes(destination, property, mapIgnoreAttributes, actualSources, report);
                 ValidateRedundancy(destination, property, mapIgnoreAttributes, report);
@@ -63,10 +67,14 @@ internal static class MapIgnoreValidation
         {
             if (attribute.ConstructorArguments.Length == 0 ||
                 attribute.ConstructorArguments[0].Value is not INamedTypeSymbol namedSource)
+            {
                 continue;
+            }
 
             if (actualSources.Contains(namedSource))
+            {
                 continue;
+            }
 
             report(Diagnostic.Create(
                 Diagnostics.MapIgnoreSourceTypeNeverMapped,
@@ -114,7 +122,9 @@ internal static class MapIgnoreValidation
         }
 
         if (reasons.Count == 0)
+        {
             return;
+        }
 
         report(Diagnostic.Create(
             Diagnostics.RedundantMapIgnore,

@@ -48,7 +48,9 @@ public class ProjectionBenchmarks
             {
                 var comments = new List<GraphComment>(CommentsPerPost);
                 for (var c = 0; c < CommentsPerPost; c++)
+                {
                     comments.Add(new GraphComment { Author = "Reader", Text = "Nice post!" });
+                }
 
                 posts.Add(new GraphPost { Headline = $"Post {p}", Comments = comments });
             }

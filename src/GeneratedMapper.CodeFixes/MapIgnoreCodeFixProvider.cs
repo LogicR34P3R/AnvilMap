@@ -26,14 +26,18 @@ public sealed class MapIgnoreCodeFixProvider : CodeFixProvider
     {
         var root = await context.Document.GetSyntaxRootAsync(context.CancellationToken).ConfigureAwait(false);
         if (root is null)
+        {
             return;
+        }
 
         var diagnostic = context.Diagnostics[0];
         var property = root.FindNode(diagnostic.Location.SourceSpan)
             .FirstAncestorOrSelf<PropertyDeclarationSyntax>();
 
         if (property is null)
+        {
             return;
+        }
 
         context.RegisterCodeFix(
             CodeAction.Create(
