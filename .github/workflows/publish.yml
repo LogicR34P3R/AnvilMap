@@ -1,0 +1,50 @@
+name: Publish to NuGet
+
+on:
+  release:
+    types: [published]
+
+permissions:
+  contents: read
+  id-token: write # required for NuGet Trusted Publishing (OIDC) - see NuGet/login@v1 below
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "10.0.x"
+
+      - name: Restore
+        run: dotnet restore GeneratedMapper.sln
+
+      - name: Build
+        run: dotnet build GeneratedMapper.sln -c Release --no-restore
+
+      - name: Test
+        run: dotnet test GeneratedMapper.sln -c Release --no-build
+
+      - name: Pack
+        run: dotnet pack GeneratedMapper.sln -c Release --no-build -o ./nupkg-out
+
+      # Exchanges this workflow run's GitHub OIDC token for a NuGet.org API key valid for one
+      # hour - no long-lived NUGET_API_KEY secret needed. Requires a Trusted Publishing policy
+      # configured on nuget.org for LogicR34P3R pointing at this repo and publish.yml.
+      - name: NuGet login (Trusted Publishing)
+        uses: NuGet/login@v1
+        id: login
+        with:
+          user: ${{ secrets.NUGET_USER }}
+
+      # Abstractions first: Generator's packed dependency on it must already exist on nuget.org.
+      - name: Push GeneratedMapper.Abstractions
+        run: dotnet nuget push ./nupkg-out/GeneratedMapper.Abstractions.*.nupkg --api-key ${{ steps.login.outputs.NUGET_API_KEY }} --source https://api.nuget.org/v3/index.json --skip-duplicate
+
+      - name: Push GeneratedMapper.Generator
+        run: dotnet nuget push ./nupkg-out/GeneratedMapper.Generator.*.nupkg --api-key ${{ steps.login.outputs.NUGET_API_KEY }} --source https://api.nuget.org/v3/index.json --skip-duplicate
