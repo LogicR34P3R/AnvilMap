@@ -19,8 +19,11 @@
          4.8.0 for its own netstandard2.0 analyzer host compatibility floor. -->
     <PackageVersion Include="Microsoft.CodeAnalysis.CSharp.Workspaces" Version="5.0.0" />
 
-    <PackageVersion Include="Microsoft.EntityFrameworkCore.Sqlite" Version="8.0.30" />
-    <PackageVersion Include="Microsoft.NET.Test.Sdk" Version="17.8.0" />
+    <!-- Not the latest 10.x: that line dropped net8.0 support entirely (NU1202), and most
+         projects referencing this still target net8.0. 9.0.19 is the latest version that still
+         has a net8.0 asset group. -->
+    <PackageVersion Include="Microsoft.EntityFrameworkCore.Sqlite" Version="9.0.19" />
+    <PackageVersion Include="Microsoft.NET.Test.Sdk" Version="18.9.0" />
 
     <!-- Matches exactly what Microsoft.CodeAnalysis.CSharp 5.0.0 itself depends on for its
          netstandard2.0 group - a version far above what that Roslyn build was tested against
