@@ -1,5 +1,3 @@
-using System.Collections.Generic;
-
 namespace GeneratedMapper.Sample.Aot.ViewModels;
 
 public sealed class OrderDto
@@ -8,6 +6,7 @@ public sealed class OrderDto
     public string Reference { get; set; } = "";
     public string InternalNotes { get; set; } = "";
     public decimal Total { get; set; }
+    public string CustomerEmail { get; set; } = "";
     public CustomerDto Customer { get; set; } = new();
     public List<LineItemDto> LineItems { get; set; } = new();
 }

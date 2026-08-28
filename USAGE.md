@@ -174,6 +174,10 @@ public sealed class User
 }
 ```
 
+The source name can also be a dotted path into a nested property (e.g. `"HomeAddress.City"`),
+letting you pick a specific nested source explicitly instead of relying on
+[naming-convention flattening](#naming-convention-flattening) to guess it.
+
 **Exclude a destination property** from being reported as unmapped (`[MapIgnore]`, put on the
 *destination* property itself — the one exception to "config lives on the source"):
 
@@ -300,6 +304,104 @@ types are mapped *somewhere in the same project*. The same applies to collection
 (`List<T>`/arrays/`IEnumerable<T>`): if the element types have a mapping between them, the
 collection property maps automatically, materialized into whatever collection shape the
 destination declares (`List<T>`, `T[]`, `HashSet<T>`).
+
+## Naming-convention flattening
+
+When a destination property has no exact-name match and no explicit `[MapProperty]` override,
+the generator tries splitting its name at PascalCase boundaries against a chain of nested source
+properties:
+
+```csharp
+[MapTo(typeof(UserDto))]
+public sealed class User
+{
+    public Address HomeAddress { get; set; } = new();
+}
+
+public sealed class Address
+{
+    public string City { get; set; } = "";
+}
+
+public sealed class UserDto
+{
+    public string HomeAddressCity { get; set; } = "";
+}
+```
+
+`UserDto.HomeAddressCity` has no exact match on `User`, so the generator tries `Home.AddressCity`
+(no `Home` property exists) and `HomeAddress.City` (matches) — producing
+`destination.HomeAddressCity = source.HomeAddress.City;`. This is a fallback for the default
+name-matching path only — it never runs when an explicit `[MapProperty]` override is present for
+that destination property (see below for how to name a nested path explicitly instead). Every
+*intermediate* segment in a matched chain must be non-nullable (a `?`-annotated or `Nullable<T>`
+intermediate is excluded from candidates entirely, rather than emitting an unguarded chain that
+could throw at runtime) — the leaf property's own nullability is unaffected by this and follows
+the same rules as a normal direct match.
+
+If a destination name splits more than one valid way, the match is ambiguous and left unmapped
+(`GM010`) rather than guessed:
+
+```csharp
+[MapTo(typeof(UserDto))]
+public sealed class User
+{
+    public Home Home { get; set; } = new();
+    public Address HomeAddress { get; set; } = new();
+}
+
+public sealed class Home
+{
+    public string AddressCity { get; set; } = "";
+}
+
+public sealed class Address
+{
+    public string City { get; set; } = "";
+}
+
+public sealed class UserDto
+{
+    public string HomeAddressCity { get; set; } = "";
+}
+```
+
+Here `HomeAddressCity` splits two valid ways — `Home.AddressCity` and `HomeAddress.City` both
+resolve — so it's left unmapped. Disambiguate by naming the specific dotted path in an explicit
+`[MapProperty]` — unlike the PascalCase search above, an explicit source name is walked exactly
+as written (no guessing, so no ambiguity), and it isn't restricted to a top-level property name:
+
+```csharp
+[MapTo(typeof(UserDto))]
+[MapProperty(typeof(UserDto), "HomeAddress.City", nameof(UserDto.HomeAddressCity))]
+public sealed class User
+{
+    public Home Home { get; set; } = new();
+    public Address HomeAddress { get; set; } = new();
+}
+```
+
+An invalid explicit path — a segment that doesn't exist, or an intermediate segment that's
+nullable (the same rule as above) — is reported as `GM021` rather than left unmapped with no
+explanation. `[MapUsing]` is an alternative when the destination actually needs a *computed*
+value rather than just a different source property:
+
+```csharp
+[MapTo(typeof(UserDto))]
+[MapUsing(typeof(UserDto), nameof(UserDto.HomeAddressCity), nameof(ResolveHomeAddressCity))]
+public sealed class User
+{
+    public Home Home { get; set; } = new();
+    public Address HomeAddress { get; set; } = new();
+
+    public static string ResolveHomeAddressCity(User source) => source.HomeAddress.City;
+}
+```
+
+A flattened or explicitly-pathed match resolves independently in each direction, so it's **not**
+auto-reversed by `GenerateReverse` — see [Reverse mappings](#reverse-mappings) below. Since the
+matched chain is just a longer property-access expression, this works identically — with no extra
+codegen — in both the imperative mapper and `.ProjectTo{Destination}()`'s SQL projection.
 
 ## Reverse mappings
 
@@ -436,7 +538,7 @@ The generator reports build-time diagnostics instead of failing silently or thro
 | GM007 | Warning | `[MapCondition]` on an `init`-only destination property isn't supported — the property was left out. |
 | GM008 | Info | The two-argument `To{Dest}(source, destination)` overload was omitted because the destination has `init`-only properties. |
 | GM009 | Error | `[MapUsing]` references a method that doesn't exist or has the wrong signature/return type. |
-| GM010 | Warning | A destination property's name matched more than one valid naming-convention-flattening path — left unmapped rather than guessed. Add `[MapProperty]` to disambiguate. |
+| GM010 | Warning | A destination property's name matched more than one valid naming-convention-flattening path — left unmapped rather than guessed. Add a `[MapProperty]` naming the specific dotted path (e.g. `"HomeAddress.City"`) to state which one. |
 | GM011 | Warning | The same source/destination pair was declared more than once (`[MapTo]` and/or `[MapFrom]`, including a `GenerateReverse`-implied pair colliding with an explicit declaration). Only the last one encountered is used. |
 | GM012 | Warning | A `[MapCondition]`, `[MapUsing]`, `[MapDefault]`, or `[MapProperty]` targets a property that a `[MapIgnore]` already excludes from this same mapping, so the configuration is never consulted. Remove it, or scope the `[MapIgnore]` to a different source type. |
 | GM013 | Error | A `required` destination property has no resolved mapping and was left unset — the generated method will fail to compile (`CS9035`). Add a matching source property, a `[MapProperty]` override, a `[MapDefault]`, or remove `required`. |
@@ -447,6 +549,7 @@ The generator reports build-time diagnostics instead of failing silently or thro
 | GM018 | Error | A `Nested`/`Enumerable` property's own mapping was itself skipped (e.g. by `GM006`), so there's no generated method to call — the generated code will fail to compile. Fix whatever skipped that mapping (see its own diagnostic), or add a `[MapIgnore]` here. |
 | GM019 | Warning | A `[MapDefault]` has no effect: it targets a nested/enumerable property, its value isn't a literal Roslyn can express as an attribute constant, or the property's type can't hold `null`. Remove it, or see `MapDefaultAttribute`'s documentation for what it supports. |
 | GM020 | Warning | `MaxDepth` has no effect: either the destination isn't built via plain mutable-property assignment (a positional record, or one with `init`-only properties, neither of which supports the depth-guard mechanism), or no property on the mapping is actually self-recursive. |
+| GM021 | Warning | An explicit `[MapProperty]` source name doesn't resolve — a plain name that isn't a top-level source property, a dotted path with a segment that doesn't exist, or one with a nullable intermediate segment. Check for a typo, or update the `[MapProperty]` if the source changed. |
 
 GM001, GM004, and GM009 have one-click IDE code fixes available if you also reference
 `GeneratedMapper.CodeFixes`.

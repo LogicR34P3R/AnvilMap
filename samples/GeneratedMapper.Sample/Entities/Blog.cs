@@ -1,5 +1,3 @@
-using System.Collections.Generic;
-using GeneratedMapper;
 using GeneratedMapper.Sample.ViewModels;
 
 namespace GeneratedMapper.Sample.Entities;

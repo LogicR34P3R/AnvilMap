@@ -6,14 +6,16 @@ namespace GeneratedMapper.Generator;
 
 // Naming-convention flattening: when a destination property has no exact-name source match (and
 // no explicit [MapProperty] override), tries splitting its name at PascalCase boundaries against
-// a chain of nested property accesses - e.g. HomeAddressCity -> source.HomeAddress.City. Only
-// ever a fallback for the default name-matching path; an explicit [MapProperty] name must still
-// be an exact top-level property name. Deliberately conservative: every non-terminal segment in
-// a candidate path must be non-nullable, so the emitted chain (source.A.B.C) never needs a
-// null-guard - a genuinely nullable intermediate segment is excluded from candidates entirely
-// rather than attempting `?.` chaining (which would also need a fallback for a non-nullable
-// destination leaf). Ambiguous matches (more than one valid split) are surfaced as GM010 and left
-// unmapped rather than guessing - same fail-closed posture as TryMatchConstructor.
+// a chain of nested property accesses - e.g. HomeAddressCity -> source.HomeAddress.City. A
+// fallback for the default name-matching path only; an explicit [MapProperty] override instead
+// walks a dotted source name it's given literally (TryResolveExplicitPath below) - no PascalCase
+// search needed there, since every segment is already spelled out. Both share the same
+// deliberately conservative rule: every non-terminal segment in a candidate path must be
+// non-nullable, so the emitted chain (source.A.B.C) never needs a null-guard - a genuinely
+// nullable intermediate segment is excluded rather than attempting `?.` chaining (which would
+// also need a fallback for a non-nullable destination leaf). Ambiguous PascalCase matches (more
+// than one valid split) are surfaced as GM010 and left unmapped rather than guessing - same
+// fail-closed posture as TryMatchConstructor.
 internal static partial class MappingResolver
 {
     // Returns the unique matching property chain (root-to-leaf, length >= 2), or null if zero
@@ -35,6 +37,49 @@ internal static partial class MappingResolver
 
         ambiguous = results.Count > 1;
         return null;
+    }
+
+    // Walks an explicit [MapProperty] dotted source name (e.g. "HomeAddress.City") segment by
+    // segment, by exact name - unlike TryResolveFlattenedPath above, every segment is already
+    // given literally, so there's no PascalCase split point to search for and never more than one
+    // possible path. Returns null with a specific `failureReason` (surfaced as GM021) the moment
+    // any segment doesn't resolve, rather than silently falling through to a generic "not found".
+    private static IReadOnlyList<IPropertySymbol>? TryResolveExplicitPath(
+        ITypeSymbol sourceType,
+        string dottedSourceName,
+        out string? failureReason)
+    {
+        var segments = dottedSourceName.Split('.');
+        var path = new List<IPropertySymbol>(segments.Length);
+        var currentType = sourceType;
+
+        for (var i = 0; i < segments.Length; i++)
+        {
+            var segment = segments[i];
+            var property = currentType.GetMembers(segment)
+                .OfType<IPropertySymbol>()
+                .FirstOrDefault(p => !p.IsStatic && p.GetMethod is not null);
+
+            if (property is null)
+            {
+                failureReason = $"'{currentType.ToDisplayString()}' has no accessible property called '{segment}'";
+                return null;
+            }
+
+            var isLast = i == segments.Length - 1;
+
+            if (!isLast && IsNullableSegment(property.Type))
+            {
+                failureReason = $"'{segment}' is nullable, so the chain can't continue through it safely - only the last segment in a [MapProperty] source path may be nullable";
+                return null;
+            }
+
+            path.Add(property);
+            currentType = property.Type;
+        }
+
+        failureReason = null;
+        return path;
     }
 
     // Depth-first search over PascalCase split points. `remainingName` always strictly shrinks

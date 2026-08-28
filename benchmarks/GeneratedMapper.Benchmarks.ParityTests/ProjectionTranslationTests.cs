@@ -1,4 +1,3 @@
-using AutoMapper;
 using AutoMapper.QueryableExtensions;
 using GeneratedMapper.Benchmarks.AutoMapperConfig;
 using GeneratedMapper.Benchmarks.Db;

@@ -3,8 +3,10 @@ using GeneratedMapper.Sample.Aot.Models;
 using GeneratedMapper.Sample.Aot.ViewModels;
 
 // Native AOT verification target - see README.md's "Native AOT" section. Exercises direct/
-// nested/enumerable mapping, [MapCondition], and [MapUsing], and asserts the results rather than
-// just printing them, to catch a silently-wrong trim rather than just a nonzero exit code.
+// nested/enumerable mapping, [MapCondition], [MapUsing], and an explicit dotted-path
+// [MapProperty] (naming-convention flattening's own escape hatch), and asserts the results
+// rather than just printing them, to catch a silently-wrong trim rather than just a nonzero
+// exit code.
 
 var external = new Order
 {
@@ -59,6 +61,7 @@ static void Verify(string via, OrderDto dto, Order source, bool checkConditioned
     Assert(dto.Reference == source.Reference, "Reference");
     Assert(dto.Customer.Name == source.Customer.Name, "Customer.Name (nested mapping)");
     Assert(dto.Customer.Email == source.Customer.Email, "Customer.Email (nested mapping)");
+    Assert(dto.CustomerEmail == source.Customer.Email, "CustomerEmail (explicit dotted-path [MapProperty])");
     Assert(dto.LineItems.Count == source.LineItems.Count, "LineItems.Count (enumerable mapping)");
 
     for (var i = 0; i < source.LineItems.Count; i++)

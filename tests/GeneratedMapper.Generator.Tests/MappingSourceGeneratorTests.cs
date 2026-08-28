@@ -1,7 +1,5 @@
-using System.Linq;
 using System.Text.RegularExpressions;
 using Microsoft.CodeAnalysis;
-using Xunit;
 
 namespace GeneratedMapper.Generator.Tests;
 

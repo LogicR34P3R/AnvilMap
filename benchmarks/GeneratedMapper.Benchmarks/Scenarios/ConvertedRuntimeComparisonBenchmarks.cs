@@ -1,4 +1,3 @@
-using AutoMapper;
 using BenchmarkDotNet.Attributes;
 using BenchmarkDotNet.Jobs;
 using GeneratedMapper.Benchmarks.AutoMapperConfig;
