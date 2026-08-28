@@ -52,6 +52,14 @@
          itself) - present solely so `dotnet pack` translates it into a NuGet dependency on the
          AnvilMap.Abstractions package, so installing this package pulls that one in too. -->
     <ProjectReference Include="..\AnvilMap.Abstractions\AnvilMap.Abstractions.csproj" />
+
+    <!-- PrivateAssets="all" so this doesn't turn into a NuGet dependency on a (nonexistent,
+         unpublished) AnvilMap.CodeFixes package - the codefix DLL itself is packed straight into
+         this package's own analyzers/dotnet/cs payload below, the same way real Roslyn
+         analyzer+codefix packages ship both assemblies side by side. Default CopyLocal behavior
+         places AnvilMap.CodeFixes.dll in this project's own $(OutputPath) alongside
+         AnvilMap.Generator.dll, which the pack item below then picks up. -->
+    <ProjectReference Include="..\AnvilMap.CodeFixes\AnvilMap.CodeFixes.csproj" PrivateAssets="all" />
   </ItemGroup>
   <ItemGroup>
     <AdditionalFiles Include="AnalyzerReleases.Shipped.md" />
@@ -60,6 +68,9 @@
   <ItemGroup>
     <None Include="..\..\README.md" Pack="true" PackagePath="\" />
     <None Include="$(OutputPath)\$(AssemblyName).dll" Pack="true" PackagePath="analyzers/dotnet/cs" Visible="false" />
+    <!-- Codefixes ship alongside the analyzer in the same analyzers/dotnet/cs folder so a
+         consumer installing this package gets both, with no separate package to install. -->
+    <None Include="$(OutputPath)\AnvilMap.CodeFixes.dll" Pack="true" PackagePath="analyzers/dotnet/cs" Visible="false" />
     <!-- Auto-configures InterceptorsNamespaces for any consumer of this package - see the
          props file's own comment. Packed under buildTransitive (not just build) so the property
          still flows if this package is ever referenced transitively through another one, not just
