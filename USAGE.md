@@ -18,7 +18,7 @@ dotnet pack GeneratedMapper.sln -c Release -o ./nupkg-out
 then add a `nuget.config` pointing at that folder in your own project and
 
 ```
-dotnet add package GeneratedMapper.Generator --version 0.1.0
+dotnet add package GeneratedMapper.Generator --version 1.0.0
 ```
 
 This one package pulls in `GeneratedMapper.Abstractions` automatically — you don't need to
