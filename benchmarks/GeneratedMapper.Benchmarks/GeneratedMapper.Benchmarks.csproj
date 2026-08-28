@@ -19,7 +19,7 @@
          under net10.0 (allowed - a newer TargetFramework can reference an older-targeted
          package), which is why ProjectionBenchmarks/BenchmarkDbContext don't need excluding
          there too. -->
-    <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" Version="8.0.10" Condition="'$(TargetFramework)' != 'net6.0'" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" Version="8.0.30" Condition="'$(TargetFramework)' != 'net6.0'" />
   </ItemGroup>
 
   <ItemGroup>
