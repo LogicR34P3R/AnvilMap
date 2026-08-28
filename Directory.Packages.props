@@ -1,0 +1,34 @@
+<Project>
+  <PropertyGroup>
+    <ManagePackageVersionsCentrally>true</ManagePackageVersionsCentrally>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageVersion Include="AutoMapper" Version="16.2.0" />
+    <PackageVersion Include="BenchmarkDotNet" Version="0.15.8" />
+    <PackageVersion Include="coverlet.collector" Version="10.0.1" />
+
+    <!-- Pinned to exactly 5.0.0, not the latest 5.x: this repo's own SDK (10.0.100) bundles a
+         host compiler reporting as Microsoft.CodeAnalysis 5.0.0.0, and 5.9.0 produced CS9057
+         (analyzer assembly references a newer compiler than the one running it). 5.0.0 is also
+         the first version LanguageVersion.CSharp14 compiles under (4.14.0 still fails CS0117). -->
+    <PackageVersion Include="Microsoft.CodeAnalysis.CSharp" Version="5.0.0" />
+    <!-- Kept equal to Microsoft.CodeAnalysis.CSharp above - GeneratedMapper.CodeFixes.Tests loads
+         GeneratedMapper.Generator via ProjectReference, so a mismatch produces a CS1705 assembly
+         identity conflict at build time. src/GeneratedMapper.CodeFixes overrides this down to
+         4.8.0 for its own netstandard2.0 analyzer host compatibility floor. -->
+    <PackageVersion Include="Microsoft.CodeAnalysis.CSharp.Workspaces" Version="5.0.0" />
+
+    <PackageVersion Include="Microsoft.EntityFrameworkCore.Sqlite" Version="8.0.30" />
+    <PackageVersion Include="Microsoft.NET.Test.Sdk" Version="17.8.0" />
+
+    <!-- Matches exactly what Microsoft.CodeAnalysis.CSharp 5.0.0 itself depends on for its
+         netstandard2.0 group - a version far above what that Roslyn build was tested against
+         loads fine on this repo's own newer SDK but throws FileNotFoundException inside an
+         older real consumer's compiler host. -->
+    <PackageVersion Include="System.Collections.Immutable" Version="9.0.0" />
+
+    <PackageVersion Include="xunit" Version="2.9.3" />
+    <PackageVersion Include="xunit.runner.visualstudio" Version="4.0.0" />
+  </ItemGroup>
+</Project>
