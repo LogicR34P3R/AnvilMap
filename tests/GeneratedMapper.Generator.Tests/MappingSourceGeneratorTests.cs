@@ -904,6 +904,7 @@ public sealed class CategoryDto
         Assert.Contains("private static global::Sample.CategoryDto ToCategoryDto(this global::Sample.Category source, global::Sample.CategoryDto destination, int depth)", result.GeneratedSource);
         Assert.Contains("if (depth < 3)", result.GeneratedSource);
         Assert.Contains("destination.Parent = source.Parent?.ToCategoryDto(new global::Sample.CategoryDto(), depth + 1)!;", result.GeneratedSource);
+        Assert.DoesNotContain(result.GeneratorDiagnostics, d => d.Id == "GM020");
         AssertNoCompileErrors(result);
     }
 
@@ -933,6 +934,7 @@ public sealed class CategoryDto
         Assert.NotNull(result.GeneratedSource);
         Assert.Contains("if (depth < 2)", result.GeneratedSource);
         Assert.Contains("destination.Children = source.Children.Select(x => x.ToCategoryDto(new global::Sample.CategoryDto(), depth + 1)).ToList();", result.GeneratedSource);
+        Assert.DoesNotContain(result.GeneratorDiagnostics, d => d.Id == "GM020");
         AssertNoCompileErrors(result);
     }
 
@@ -961,6 +963,7 @@ public sealed class CategoryDto
         Assert.NotNull(result.GeneratedSource);
         Assert.Contains("destination.Parent = source.Parent?.ToCategoryDto()!;", result.GeneratedSource);
         Assert.DoesNotContain("int depth", result.GeneratedSource);
+        Assert.DoesNotContain(result.GeneratorDiagnostics, d => d.Id == "GM020");
         AssertNoCompileErrors(result);
     }
 
@@ -1324,8 +1327,40 @@ public sealed class BDto
         // MaxDepth only guards DIRECT self-reference within one [MapTo] declaration. A's
         // Nested property is type B (a *different* mapping pair), not A itself, so it isn't
         // guarded — no depth parameter should be threaded through either mapping's methods.
-        // This documents the current, known limitation rather than a passing feature.
+        // This documents the current, known limitation rather than a passing feature - now
+        // surfaced as GM020 for both mappings instead of silently doing nothing.
         Assert.DoesNotContain("int depth", result.GeneratedSource);
+        Assert.Contains(result.GeneratorDiagnostics, d => d.Id == "GM020" && d.GetMessage().Contains("A") && d.GetMessage().Contains("ADto"));
+        Assert.Contains(result.GeneratorDiagnostics, d => d.Id == "GM020" && d.GetMessage().Contains("B") && d.GetMessage().Contains("BDto"));
+        AssertNoCompileErrors(result);
+    }
+
+    [Fact]
+    public void MaxDepth_SelfRecursivePositionalRecordDestination_ReportsGM020BecauseGuardIsUnsupported()
+    {
+        // CategoryDto is a positional record: EmitConstructorBasedMapping builds it (no
+        // recursionContext, unlike the plain mutable-class shape MaxDepth's guard is wired
+        // into) - so MaxDepth = 3 here has no effect even though Category *is* self-recursive.
+        var result = GeneratorTestHelper.Run(@"
+using GeneratedMapper;
+
+namespace Sample;
+
+[MapTo(typeof(CategoryDto), MaxDepth = 3)]
+public sealed class Category
+{
+    public string Name { get; set; } = """";
+    public Category? Parent { get; set; }
+}
+
+public sealed record CategoryDto(string Name, CategoryDto? Parent);
+");
+
+        Assert.NotNull(result.GeneratedSource);
+        Assert.DoesNotContain("int depth", result.GeneratedSource);
+        Assert.Contains(result.GeneratorDiagnostics, d =>
+            d.Id == "GM020" && d.Severity == DiagnosticSeverity.Warning &&
+            d.GetMessage().Contains("Category") && d.GetMessage().Contains("CategoryDto"));
         AssertNoCompileErrors(result);
     }
 

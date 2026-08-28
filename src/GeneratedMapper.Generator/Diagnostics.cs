@@ -157,4 +157,12 @@ internal static class Diagnostics
         category: "GeneratedMapper",
         defaultSeverity: DiagnosticSeverity.Warning,
         isEnabledByDefault: true);
+
+    public static readonly DiagnosticDescriptor MaxDepthHasNoEffect = new(
+        id: "GM020",
+        title: "[MaxDepth] has no effect here",
+        messageFormat: "The MaxDepth on '{0}' -> '{1}' has no effect: {2}. Remove it, or see MapToAttribute.MaxDepth's documentation for what it guards against.",
+        category: "GeneratedMapper",
+        defaultSeverity: DiagnosticSeverity.Warning,
+        isEnabledByDefault: true);
 }

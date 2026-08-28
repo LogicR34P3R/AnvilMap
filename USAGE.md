@@ -446,6 +446,7 @@ The generator reports build-time diagnostics instead of failing silently or thro
 | GM017 | Warning | The same destination property is targeted by more than one `[MapProperty]`, `[MapCondition]`, `[MapUsing]`, or `[MapDefault]` in this mapping — only the last one encountered is used. Remove all but one, or make sure they agree. |
 | GM018 | Error | A `Nested`/`Enumerable` property's own mapping was itself skipped (e.g. by `GM006`), so there's no generated method to call — the generated code will fail to compile. Fix whatever skipped that mapping (see its own diagnostic), or add a `[MapIgnore]` here. |
 | GM019 | Warning | A `[MapDefault]` has no effect: it targets a nested/enumerable property, its value isn't a literal Roslyn can express as an attribute constant, or the property's type can't hold `null`. Remove it, or see `MapDefaultAttribute`'s documentation for what it supports. |
+| GM020 | Warning | `MaxDepth` has no effect: either the destination isn't built via plain mutable-property assignment (a positional record, or one with `init`-only properties, neither of which supports the depth-guard mechanism), or no property on the mapping is actually self-recursive. |
 
 GM001, GM004, and GM009 have one-click IDE code fixes available if you also reference
 `GeneratedMapper.CodeFixes`.
