@@ -15,3 +15,4 @@ GM016 | GeneratedMapper | Info | Redundant [MapIgnore] attributes
 GM017 | GeneratedMapper | Warning | Duplicate property-level attribute declaration
 GM018 | GeneratedMapper | Error | Nested or element mapping was itself skipped
 GM019 | GeneratedMapper | Warning | [MapDefault] has no effect here
+GM020 | GeneratedMapper | Warning | [MaxDepth] has no effect here
