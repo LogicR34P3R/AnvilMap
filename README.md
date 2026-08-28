@@ -1,6 +1,6 @@
-# GeneratedMapper
+# AnvilMap
 
-[![CI](https://github.com/LogicR34P3R/GeneratedMapper/actions/workflows/ci.yml/badge.svg)](https://github.com/LogicR34P3R/GeneratedMapper/actions/workflows/ci.yml)
+[![CI](https://github.com/LogicR34P3R/AnvilMap/actions/workflows/ci.yml/badge.svg)](https://github.com/LogicR34P3R/AnvilMap/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
 Source-generator-based mapper: compile-time replacement for runtime reflection-based mappers, for mapping between database entities and view models, with EF Core-translatable SQL projection.
@@ -24,12 +24,12 @@ public sealed class User
 
 The mapping configuration lives on the mapping declaration — either the source type (`[MapTo]`) or the destination type (`[MapFrom]`, see below) — not on either DTO/entity property. This keeps reverse mappings and projection mappings unambiguous about direction. Use `[MapIgnore]` on a destination property to opt it out of auto-wiring.
 
-For each declared mapping the generator emits, into a `GeneratedMapper.GeneratedMappings` static class:
+For each declared mapping the generator emits, into a `AnvilMap.GeneratedMappings` static class:
 
 - `To{Destination}(this Source source)` / `To{Destination}(this Source source, Destination destination)` — imperative, in-memory mapping.
 - `{Source}To{Destination}Projection` — a static `Expression<Func<Source, Destination>>` built entirely from inlined object initializers (no method calls), so it's translatable by EF Core.
 - `ProjectTo{Destination}(this IQueryable<Source> source)` — applies the projection to a query, e.g. `dbContext.Blogs.ProjectToBlogDto()`.
-- A generic `Map<TDestination>`/`Map<TSource,TDestination>` dispatcher (backed by static `FrozenDictionary` lookup tables, not a chain of type checks), plus a `GeneratedMapperService : IMapper` for DI registration (`services.AddSingleton<IMapper, GeneratedMapperService>()`). On C# 14, a statically-visible closed-generic `Map<,>` call gets an even faster path automatically — see "Interceptor-based dispatch" below.
+- A generic `Map<TDestination>`/`Map<TSource,TDestination>` dispatcher (backed by static `FrozenDictionary` lookup tables, not a chain of type checks), plus a `AnvilMapService : IMapper` for DI registration (`services.AddSingleton<IMapper, AnvilMapService>()`). On C# 14, a statically-visible closed-generic `Map<,>` call gets an even faster path automatically — see "Interceptor-based dispatch" below.
 
 Nested and enumerable (`List<T>`/array/`IEnumerable<T>`) properties are mapped automatically when a mapping exists between the element types.
 
@@ -68,7 +68,7 @@ public sealed class UserDto
 }
 ```
 
-A given mapping only needs one of `[MapTo]`/`[MapFrom]` — pick whichever side is allowed to reference the other in your architecture. Nothing else in this document depends on which one was used; every example below works identically declared either way. Declaring the same source/destination pair twice — via both `[MapTo]` and `[MapFrom]`, two `[MapTo]`s to the same destination, or a `GenerateReverse`-implied pair colliding with an explicit declaration — is reported as `GM011`; only the last declaration encountered is actually used.
+A given mapping only needs one of `[MapTo]`/`[MapFrom]` — pick whichever side is allowed to reference the other in your architecture. Nothing else in this document depends on which one was used; every example below works identically declared either way. Declaring the same source/destination pair twice — via both `[MapTo]` and `[MapFrom]`, two `[MapTo]`s to the same destination, or a `GenerateReverse`-implied pair colliding with an explicit declaration — is reported as `AM011`; only the last declaration encountered is actually used.
 
 ### Independent reverse mapping
 
@@ -96,9 +96,9 @@ public sealed class UserDto
 }
 ```
 
-This produces both `User.ToUserDto()` and `UserDto.ToUser()`, same as `GenerateReverse`, but as two fully independent declarations — it does **not** trigger `GM011`, because `[MapFrom(typeof(User))]` and `[MapTo(typeof(User))]` name two different pairs (`User → UserDto` and `UserDto → User`), not the same pair twice. `GM011` only fires when the *same* pair and direction gets declared more than once (e.g. `[MapTo(typeof(UserDto))]` on `User` *and* `[MapFrom(typeof(User))]` on `UserDto` — that's the identical `User → UserDto` direction declared from both sides).
+This produces both `User.ToUserDto()` and `UserDto.ToUser()`, same as `GenerateReverse`, but as two fully independent declarations — it does **not** trigger `AM011`, because `[MapFrom(typeof(User))]` and `[MapTo(typeof(User))]` name two different pairs (`User → UserDto` and `UserDto → User`), not the same pair twice. `AM011` only fires when the *same* pair and direction gets declared more than once (e.g. `[MapTo(typeof(UserDto))]` on `User` *and* `[MapFrom(typeof(User))]` on `UserDto` — that's the identical `User → UserDto` direction declared from both sides).
 
-The two directions don't collide even though every companion attribute above names the same `Type` argument (`typeof(User)`): what actually separates them is the destination-property name in each attribute — `EmailAddress` only exists on `UserDto` (the `[MapFrom]` direction's destination), `Email` only exists on `User` (the `[MapTo]` direction's destination). One real footgun: each direction needs its *own*, oppositely-oriented companion attribute — reusing the same `[MapProperty(typeof(User), nameof(User.Email), nameof(EmailAddress))]` for both (instead of writing a second one with the arguments swapped) only configures the `[MapFrom]` direction; the other one silently falls back to exact-name matching, finds nothing, and reports `GM001`.
+The two directions don't collide even though every companion attribute above names the same `Type` argument (`typeof(User)`): what actually separates them is the destination-property name in each attribute — `EmailAddress` only exists on `UserDto` (the `[MapFrom]` direction's destination), `Email` only exists on `User` (the `[MapTo]` direction's destination). One real footgun: each direction needs its *own*, oppositely-oriented companion attribute — reusing the same `[MapProperty(typeof(User), nameof(User.Email), nameof(EmailAddress))]` for both (instead of writing a second one with the arguments swapped) only configures the `[MapFrom]` direction; the other one silently falls back to exact-name matching, finds nothing, and reports `AM001`.
 
 ### Conditional mapping
 
@@ -114,7 +114,7 @@ public sealed class Post
 }
 ```
 
-`[MapCondition]` gates a single destination property behind a `static bool` method declared on the source type, with signature `(TSource)` or `(TSource, TDestination?)` (the two-arg form can also inspect the destination, e.g. "only overwrite if not already set"). The condition is honored by the imperative mapper and — since it's just called through `To{Destination}(...)` — by the `IMapper`/`Map<T>` dispatcher too. It is **not** honored by `.ProjectTo{Destination}()`: an arbitrary method call can't be translated to SQL, so the property is left out of the projection entirely (`GM005`). Conditions are not auto-reversed by `GenerateReverse` — declare a separate `[MapCondition]` on the DTO if the reverse direction needs one too.
+`[MapCondition]` gates a single destination property behind a `static bool` method declared on the source type, with signature `(TSource)` or `(TSource, TDestination?)` (the two-arg form can also inspect the destination, e.g. "only overwrite if not already set"). The condition is honored by the imperative mapper and — since it's just called through `To{Destination}(...)` — by the `IMapper`/`Map<T>` dispatcher too. It is **not** honored by `.ProjectTo{Destination}()`: an arbitrary method call can't be translated to SQL, so the property is left out of the projection entirely (`AM005`). Conditions are not auto-reversed by `GenerateReverse` — declare a separate `[MapCondition]` on the DTO if the reverse direction needs one too.
 
 ### Custom conversion
 
@@ -165,13 +165,13 @@ public sealed class UserDto
 }
 ```
 
-When a destination property has no exact-name match and no explicit `[MapProperty]` override, the generator tries splitting its name at PascalCase boundaries against a chain of nested source properties — `HomeAddressCity` against `source.HomeAddress.City`, checking each segment by exact case-sensitive name. This is a fallback for the default name-matching path only, and never runs when an explicit `[MapProperty]` override is present for that destination property — its source name can itself be a dotted path (e.g. `"HomeAddress.City"`), walked exactly as written rather than searched for, so it works even where the PascalCase search can't (see below) or where you'd rather be explicit. Every *intermediate* segment in a resolved chain, PascalCase-searched or explicit, must be non-nullable (a `?`-annotated or `Nullable<T>` intermediate is excluded/rejected rather than emitting an unguarded chain that could throw at runtime — an explicit path failing this, or naming a segment that doesn't exist, is reported as `GM021`) — the leaf property's own nullability is unaffected by this and follows the same rules as a normal direct match. If a destination name splits more than one valid PascalCase way (e.g. both `Home.AddressCity` and `HomeAddress.City` resolve), the match is ambiguous and the property is left unmapped (`GM010`) rather than guessing — add a `[MapProperty]` naming the specific dotted path to disambiguate. A flattened match resolves independently in each direction, so it is **not** auto-reversed by `GenerateReverse`: the reverse direction has no way to un-flatten a scalar back into constructing a nested object, and leaves the nested property unmapped (`GM001`) unless you supply one yourself. Since the matched chain is just a longer property-access expression, this works identically — with no extra codegen — in both the imperative mapper and `.ProjectTo{Destination}()`'s SQL projection (see the sample app's `Post.Author`/`PostDto.AuthorDisplayName`, an EF Core owned type flattened straight into a SQL column).
+When a destination property has no exact-name match and no explicit `[MapProperty]` override, the generator tries splitting its name at PascalCase boundaries against a chain of nested source properties — `HomeAddressCity` against `source.HomeAddress.City`, checking each segment by exact case-sensitive name. This is a fallback for the default name-matching path only, and never runs when an explicit `[MapProperty]` override is present for that destination property — its source name can itself be a dotted path (e.g. `"HomeAddress.City"`), walked exactly as written rather than searched for, so it works even where the PascalCase search can't (see below) or where you'd rather be explicit. Every *intermediate* segment in a resolved chain, PascalCase-searched or explicit, must be non-nullable (a `?`-annotated or `Nullable<T>` intermediate is excluded/rejected rather than emitting an unguarded chain that could throw at runtime — an explicit path failing this, or naming a segment that doesn't exist, is reported as `AM021`) — the leaf property's own nullability is unaffected by this and follows the same rules as a normal direct match. If a destination name splits more than one valid PascalCase way (e.g. both `Home.AddressCity` and `HomeAddress.City` resolve), the match is ambiguous and the property is left unmapped (`AM010`) rather than guessing — add a `[MapProperty]` naming the specific dotted path to disambiguate. A flattened match resolves independently in each direction, so it is **not** auto-reversed by `GenerateReverse`: the reverse direction has no way to un-flatten a scalar back into constructing a nested object, and leaves the nested property unmapped (`AM001`) unless you supply one yourself. Since the matched chain is just a longer property-access expression, this works identically — with no extra codegen — in both the imperative mapper and `.ProjectTo{Destination}()`'s SQL projection (see the sample app's `Post.Author`/`PostDto.AuthorDisplayName`, an EF Core owned type flattened straight into a SQL column).
 
 ### Diagnostics
 
-`GM001` (destination property left unmapped), `GM002` (projection skipped — the mapping graph is cyclic; the imperative method is still generated), `GM003` (error — incompatible property types with no implicit conversion), `GM004` (error — `[MapCondition]` references a method that doesn't exist or has the wrong signature), `GM005` (a conditionally-mapped property was left out of a SQL projection), `GM006` (a mapping was skipped entirely because the destination has an init-only property, no accessible parameterless constructor, and no constructor whose parameters could all be matched to already-mapped, unconditioned properties), `GM007` (`[MapCondition]` on an init-only destination property isn't supported — the property was left out), `GM008` (the two-arg `To{Dest}(source, destination)` overload was omitted because the destination has init-only properties), `GM009` (error — `[MapUsing]` references a method that doesn't exist or has the wrong signature/return type), `GM010` (a destination property's name matched more than one valid naming-convention-flattening path and was left unmapped), `GM011` (the same source/destination pair was declared more than once — via `[MapTo]`, `[MapFrom]`, or a `GenerateReverse`-implied pair colliding with an explicit one; only the last one encountered is used).
+`AM001` (destination property left unmapped), `AM002` (projection skipped — the mapping graph is cyclic; the imperative method is still generated), `AM003` (error — incompatible property types with no implicit conversion), `AM004` (error — `[MapCondition]` references a method that doesn't exist or has the wrong signature), `AM005` (a conditionally-mapped property was left out of a SQL projection), `AM006` (a mapping was skipped entirely because the destination has an init-only property, no accessible parameterless constructor, and no constructor whose parameters could all be matched to already-mapped, unconditioned properties), `AM007` (`[MapCondition]` on an init-only destination property isn't supported — the property was left out), `AM008` (the two-arg `To{Dest}(source, destination)` overload was omitted because the destination has init-only properties), `AM009` (error — `[MapUsing]` references a method that doesn't exist or has the wrong signature/return type), `AM010` (a destination property's name matched more than one valid naming-convention-flattening path and was left unmapped), `AM011` (the same source/destination pair was declared more than once — via `[MapTo]`, `[MapFrom]`, or a `GenerateReverse`-implied pair colliding with an explicit one; only the last one encountered is used).
 
-Diagnostic IDs are never reused, only retired, tracked via `src/GeneratedMapper.Generator/AnalyzerReleases.Shipped.md`/`.Unshipped.md` (mechanically enforced at build time — see `CONTRIBUTING.md`).
+Diagnostic IDs are never reused, only retired, tracked via `src/AnvilMap.Generator/AnalyzerReleases.Shipped.md`/`.Unshipped.md` (mechanically enforced at build time — see `CONTRIBUTING.md`).
 
 ### Recursion guard for self-referential types
 
@@ -188,19 +188,19 @@ public sealed class Category
 
 ### Init-only and record destinations
 
-A destination with `init`-only properties (including non-positional records) is mapped by building the object via initializer syntax in `To{Dest}(source)`; the two-arg `To{Dest}(source, destination)` overload (and `IMapper.Map(source, destination)`) is omitted for it, since an `init` property can't be assigned after construction (`GM008`).
+A destination with `init`-only properties (including non-positional records) is mapped by building the object via initializer syntax in `To{Dest}(source)`; the two-arg `To{Dest}(source, destination)` overload (and `IMapper.Map(source, destination)`) is omitted for it, since an `init` property can't be assigned after construction (`AM008`).
 
-Positional records (e.g. `record UserDto(int Id, string Name);`) are supported too: when the destination has no parameterless constructor, the generator looks for one whose parameters all match already-mapped, unconditioned properties by name and type — the record's own synthesized constructor, in the common case — and builds `new UserDto(source.Id, source.Name)` instead, both imperatively and in `.ProjectTo{Destination}()`. Any settable property not covered by that constructor is still assigned afterward (via object-initializer syntax if it's `init`-only, sequential assignment otherwise). If no confident constructor match exists — a required parameter has no matching source property, or one is gated by `[MapCondition]` (conditions can't become constructor arguments) — the mapping is skipped entirely with `GM006` rather than guessing.
+Positional records (e.g. `record UserDto(int Id, string Name);`) are supported too: when the destination has no parameterless constructor, the generator looks for one whose parameters all match already-mapped, unconditioned properties by name and type — the record's own synthesized constructor, in the common case — and builds `new UserDto(source.Id, source.Name)` instead, both imperatively and in `.ProjectTo{Destination}()`. Any settable property not covered by that constructor is still assigned afterward (via object-initializer syntax if it's `init`-only, sequential assignment otherwise). If no confident constructor match exists — a required parameter has no matching source property, or one is gated by `[MapCondition]` (conditions can't become constructor arguments) — the mapping is skipped entirely with `AM006` rather than guessing.
 
-A `required` destination property (C# 11) is set inline wherever the destination gets constructed (the object-initializer in `To{Dest}(source)`, or the constructor call for a positional record), since C# enforces `required` on that expression itself — assigning it in a later statement doesn't count. A `required` property with no resolved mapping is reported as `GM013` rather than surfacing only as a raw `CS9035` in the generated file; combining `required` with `[MapCondition]` is rejected outright (`GM014`), since a required member can't be conditionally left unset.
+A `required` destination property (C# 11) is set inline wherever the destination gets constructed (the object-initializer in `To{Dest}(source)`, or the constructor call for a positional record), since C# enforces `required` on that expression itself — assigning it in a later statement doesn't count. A `required` property with no resolved mapping is reported as `AM013` rather than surfacing only as a raw `CS9035` in the generated file; combining `required` with `[MapCondition]` is rejected outright (`AM014`), since a required member can't be conditionally left unset.
 
 ## Native AOT
 
 Everything the generator emits — the imperative `To{Dest}()` methods, the dispatcher, `IMapper` —
 is plain, direct C# with no reflection at runtime, so it publishes and runs correctly under Native
-AOT (`dotnet publish -p:PublishAot=true`). `GeneratedMapper.Abstractions`'s net8.0 target opts into
+AOT (`dotnet publish -p:PublishAot=true`). `AnvilMap.Abstractions`'s net8.0 target opts into
 `<IsAotCompatible>true</IsAotCompatible>`, turning on the trimmer/AOT analyzer's build-time
-warnings. `samples/GeneratedMapper.Sample.Aot` is a small, EF-Core-free console app that's actually
+warnings. `samples/AnvilMap.Sample.Aot` is a small, EF-Core-free console app that's actually
 published with `PublishAot=true` and run — including calling `.Compile()` on a generated
 projection field directly, exactly what `IQueryable.Select()` does under the hood for an in-memory
 provider — to confirm this rather than just assert it.
@@ -208,7 +208,7 @@ provider — to confirm this rather than just assert it.
 **One caveat:** building `{Source}To{Destination}Projection` means compiling an object-initializer
 inside an `Expression<Func<...>>`, and the C# compiler does that by calling
 `Expression.Bind(MethodInfo, Expression)` under the hood. That method is marked
-`[RequiresUnreferencedCode]`, so it trips an `IL2026` trim warning — not a GeneratedMapper bug,
+`[RequiresUnreferencedCode]`, so it trips an `IL2026` trim warning — not a AnvilMap bug,
 just what happens whenever you build a member-init expression tree. It only comes up for
 destinations that actually need an object-initializer, though: if the destination's constructor
 already covers every mapped property (a positional record, say), the projection compiles to a
@@ -253,22 +253,22 @@ manual `.csproj` edits required.
 
 ## Project layout
 
-- `src/GeneratedMapper.Abstractions` — attributes (`MapTo`, `MapFrom`, `MapProperty`, `MapIgnore`, `MapCondition`, `MapUsing`, `MapDefault`) and the `IMapper` interface.
-- `src/GeneratedMapper.Generator` — the incremental source generator.
-- `src/GeneratedMapper.CodeFixes` — IDE code fixes for the diagnostics that have an unambiguous mechanical fix (`GM001` — add `[MapIgnore]`; `GM004`/`GM009` — generate a stub method).
-- `samples/GeneratedMapper.Sample` — a runnable console app mapping EF Core entities (SQLite in-memory) to view models, printing the SQL generated by `ProjectToBlogDto()`.
-- `samples/GeneratedMapper.Sample.Aot` — a small, EF-Core-free console app that publishes and runs under Native AOT (`dotnet publish -r <rid>`, `PublishAot` is set in the project) — see the Native AOT section above.
-- `tests/GeneratedMapper.Generator.Tests` — generator unit tests driven via `CSharpGeneratorDriver`.
-- `tests/GeneratedMapper.CodeFixes.Tests` — code-fix tests driven via an `AdhocWorkspace` running the real generator.
-- `benchmarks/GeneratedMapper.Benchmarks` — BenchmarkDotNet throughput/startup/SQL-projection comparison against AutoMapper.
-- `benchmarks/GeneratedMapper.Benchmarks.ParityTests` — correctness (and SQL-translation) checks that must pass before the benchmark numbers above mean anything.
+- `src/AnvilMap.Abstractions` — attributes (`MapTo`, `MapFrom`, `MapProperty`, `MapIgnore`, `MapCondition`, `MapUsing`, `MapDefault`) and the `IMapper` interface.
+- `src/AnvilMap.Generator` — the incremental source generator.
+- `src/AnvilMap.CodeFixes` — IDE code fixes for the diagnostics that have an unambiguous mechanical fix (`AM001` — add `[MapIgnore]`; `AM004`/`AM009` — generate a stub method).
+- `samples/AnvilMap.Sample` — a runnable console app mapping EF Core entities (SQLite in-memory) to view models, printing the SQL generated by `ProjectToBlogDto()`.
+- `samples/AnvilMap.Sample.Aot` — a small, EF-Core-free console app that publishes and runs under Native AOT (`dotnet publish -r <rid>`, `PublishAot` is set in the project) — see the Native AOT section above.
+- `tests/AnvilMap.Generator.Tests` — generator unit tests driven via `CSharpGeneratorDriver`.
+- `tests/AnvilMap.CodeFixes.Tests` — code-fix tests driven via an `AdhocWorkspace` running the real generator.
+- `benchmarks/AnvilMap.Benchmarks` — BenchmarkDotNet throughput/startup/SQL-projection comparison against AutoMapper.
+- `benchmarks/AnvilMap.Benchmarks.ParityTests` — correctness (and SQL-translation) checks that must pass before the benchmark numbers above mean anything.
 
 ## Try it
 
 ```
-dotnet build GeneratedMapper.sln
-dotnet test tests/GeneratedMapper.Generator.Tests
-dotnet test tests/GeneratedMapper.CodeFixes.Tests
-dotnet run --project samples/GeneratedMapper.Sample
-dotnet publish samples/GeneratedMapper.Sample.Aot -r <rid>   # e.g. win-x64, linux-x64, osx-arm64
+dotnet build AnvilMap.sln
+dotnet test tests/AnvilMap.Generator.Tests
+dotnet test tests/AnvilMap.CodeFixes.Tests
+dotnet run --project samples/AnvilMap.Sample
+dotnet publish samples/AnvilMap.Sample.Aot -r <rid>   # e.g. win-x64, linux-x64, osx-arm64
 ```

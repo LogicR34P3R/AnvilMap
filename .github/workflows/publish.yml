@@ -22,16 +22,16 @@ jobs:
           dotnet-version: "10.0.x"
 
       - name: Restore
-        run: dotnet restore GeneratedMapper.sln
+        run: dotnet restore AnvilMap.sln
 
       - name: Build
-        run: dotnet build GeneratedMapper.sln -c Release --no-restore
+        run: dotnet build AnvilMap.sln -c Release --no-restore
 
       - name: Test
-        run: dotnet test GeneratedMapper.sln -c Release --no-build
+        run: dotnet test AnvilMap.sln -c Release --no-build
 
       - name: Pack
-        run: dotnet pack GeneratedMapper.sln -c Release --no-build -o ./nupkg-out
+        run: dotnet pack AnvilMap.sln -c Release --no-build -o ./nupkg-out
 
       # Exchanges this workflow run's GitHub OIDC token for a NuGet.org API key valid for one
       # hour - no long-lived NUGET_API_KEY secret needed. Requires a Trusted Publishing policy
@@ -43,8 +43,8 @@ jobs:
           user: ${{ secrets.NUGET_USER }}
 
       # Abstractions first: Generator's packed dependency on it must already exist on nuget.org.
-      - name: Push GeneratedMapper.Abstractions
-        run: dotnet nuget push ./nupkg-out/GeneratedMapper.Abstractions.*.nupkg --api-key ${{ steps.login.outputs.NUGET_API_KEY }} --source https://api.nuget.org/v3/index.json --skip-duplicate
+      - name: Push AnvilMap.Abstractions
+        run: dotnet nuget push ./nupkg-out/AnvilMap.Abstractions.*.nupkg --api-key ${{ steps.login.outputs.NUGET_API_KEY }} --source https://api.nuget.org/v3/index.json --skip-duplicate
 
-      - name: Push GeneratedMapper.Generator
-        run: dotnet nuget push ./nupkg-out/GeneratedMapper.Generator.*.nupkg --api-key ${{ steps.login.outputs.NUGET_API_KEY }} --source https://api.nuget.org/v3/index.json --skip-duplicate
+      - name: Push AnvilMap.Generator
+        run: dotnet nuget push ./nupkg-out/AnvilMap.Generator.*.nupkg --api-key ${{ steps.login.outputs.NUGET_API_KEY }} --source https://api.nuget.org/v3/index.json --skip-duplicate

@@ -1,0 +1,24 @@
+using AnvilMap.Sample.Entities;
+using Microsoft.EntityFrameworkCore;
+
+namespace AnvilMap.Sample;
+
+public sealed class SampleDbContext : DbContext
+{
+    public SampleDbContext(DbContextOptions<SampleDbContext> options) : base(options)
+    {
+    }
+
+    public DbSet<Blog> Blogs => Set<Blog>();
+    public DbSet<Post> Posts => Set<Post>();
+
+    protected override void OnModelCreating(ModelBuilder modelBuilder)
+    {
+        modelBuilder.Entity<Blog>()
+            .HasMany(b => b.Posts)
+            .WithOne()
+            .HasForeignKey(p => p.BlogId);
+
+        modelBuilder.Entity<Post>().OwnsOne(p => p.Author);
+    }
+}
