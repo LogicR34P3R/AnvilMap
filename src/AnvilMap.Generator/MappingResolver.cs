@@ -243,14 +243,11 @@ internal static partial class MappingResolver
                 else
                 {
                     var suggestion = NameSuggestion.FindClosest(destinationProperty.Name, sourceProperties.Keys);
-                    var suggestionText = suggestion is not null ? $" Did you mean '{suggestion}'?" : string.Empty;
+                    var location = destinationProperty.Locations.FirstOrDefault() ?? Location.None;
 
-                    report?.Invoke(Diagnostic.Create(
-                        Diagnostics.UnmappedDestinationProperty,
-                        destinationProperty.Locations.FirstOrDefault() ?? Location.None,
-                        destinationProperty.Name,
-                        destination.ToDisplayString(),
-                        suggestionText));
+                    report?.Invoke(suggestion is not null
+                        ? Diagnostic.Create(Diagnostics.UnmappedDestinationPropertyWithSuggestion, location, destinationProperty.Name, destination.ToDisplayString(), suggestion)
+                        : Diagnostic.Create(Diagnostics.UnmappedDestinationProperty, location, destinationProperty.Name, destination.ToDisplayString()));
                 }
 
                 continue;

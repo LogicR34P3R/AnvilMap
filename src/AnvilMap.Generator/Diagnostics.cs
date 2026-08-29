@@ -6,17 +6,22 @@ namespace AnvilMap.Generator;
 // never reused, only retired - see AnalyzerReleases.Shipped.md.
 internal static class Diagnostics
 {
-    // {2}: empty, or " Did you mean 'X'?" (NameSuggestion) - RS1032 can't model a message whose
-    // sentence count varies at runtime, so it's suppressed rather than worked around.
-#pragma warning disable RS1032
     public static readonly DiagnosticDescriptor UnmappedDestinationProperty = new(
         id: "AM001",
         title: "Destination property has no matching source",
-        messageFormat: "Property '{0}' on '{1}' has no matching source property and was left at its default value.{2} Add a [MapProperty] override or a [MapIgnore] to silence this.",
+        messageFormat: "Property '{0}' on '{1}' has no matching source property and was left at its default value. Add a [MapProperty] override or a [MapIgnore] to silence this.",
         category: "AnvilMap",
         defaultSeverity: DiagnosticSeverity.Info,
         isEnabledByDefault: true);
-#pragma warning restore RS1032
+
+    // Same AM001 - picked over the above only when NameSuggestion finds a close source property.
+    public static readonly DiagnosticDescriptor UnmappedDestinationPropertyWithSuggestion = new(
+        id: "AM001",
+        title: "Destination property has no matching source",
+        messageFormat: "Property '{0}' on '{1}' has no matching source property and was left at its default value. Did you mean '{2}'? Add a [MapProperty] override or a [MapIgnore] to silence this.",
+        category: "AnvilMap",
+        defaultSeverity: DiagnosticSeverity.Info,
+        isEnabledByDefault: true);
 
     public static readonly DiagnosticDescriptor ProjectionCycleSkipped = new(
         id: "AM002",
