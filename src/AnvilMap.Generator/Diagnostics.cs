@@ -6,13 +6,25 @@ namespace AnvilMap.Generator;
 // never reused, only retired - see AnalyzerReleases.Shipped.md.
 internal static class Diagnostics
 {
+    // {2} is either empty or " Did you mean 'X'?" (see NameSuggestion) - a leading space is
+    // baked into the non-empty case so this format string never needs a conditional separator
+    // of its own.
+    //
+    // RS1032 checks the literal, unsubstituted format string for "looks like a clean sentence,
+    // or clean multi-sentence ending in a period" - it can't know {2} sometimes contributes a
+    // trailing sentence and sometimes contributes nothing, so it flags this shape no matter
+    // where {2} is placed. Suppressed rather than worked around, since every placement tried
+    // (mid-string, end-of-string) still substitutes to a genuinely well-formed message either
+    // way ("...value. Add..." or "...value. Did you mean 'X'? Add...").
+#pragma warning disable RS1032
     public static readonly DiagnosticDescriptor UnmappedDestinationProperty = new(
         id: "AM001",
         title: "Destination property has no matching source",
-        messageFormat: "Property '{0}' on '{1}' has no matching source property and was left at its default value. Add a [MapProperty] override or a [MapIgnore] to silence this.",
+        messageFormat: "Property '{0}' on '{1}' has no matching source property and was left at its default value.{2} Add a [MapProperty] override or a [MapIgnore] to silence this.",
         category: "AnvilMap",
         defaultSeverity: DiagnosticSeverity.Info,
         isEnabledByDefault: true);
+#pragma warning restore RS1032
 
     public static readonly DiagnosticDescriptor ProjectionCycleSkipped = new(
         id: "AM002",
