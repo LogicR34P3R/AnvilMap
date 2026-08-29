@@ -242,11 +242,12 @@ internal static partial class MappingResolver
                 }
                 else
                 {
-                    report?.Invoke(Diagnostic.Create(
-                        Diagnostics.UnmappedDestinationProperty,
-                        destinationProperty.Locations.FirstOrDefault() ?? Location.None,
-                        destinationProperty.Name,
-                        destination.ToDisplayString()));
+                    var suggestion = NameSuggestion.FindClosest(destinationProperty.Name, sourceProperties.Keys);
+                    var location = destinationProperty.Locations.FirstOrDefault() ?? Location.None;
+
+                    report?.Invoke(suggestion is not null
+                        ? Diagnostic.Create(Diagnostics.UnmappedDestinationPropertyWithSuggestion, location, destinationProperty.Name, destination.ToDisplayString(), suggestion)
+                        : Diagnostic.Create(Diagnostics.UnmappedDestinationProperty, location, destinationProperty.Name, destination.ToDisplayString()));
                 }
 
                 continue;

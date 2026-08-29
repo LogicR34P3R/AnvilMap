@@ -14,6 +14,15 @@ internal static class Diagnostics
         defaultSeverity: DiagnosticSeverity.Info,
         isEnabledByDefault: true);
 
+    // Same AM001 - picked over the above only when NameSuggestion finds a close source property.
+    public static readonly DiagnosticDescriptor UnmappedDestinationPropertyWithSuggestion = new(
+        id: "AM001",
+        title: "Destination property has no matching source",
+        messageFormat: "Property '{0}' on '{1}' has no matching source property and was left at its default value. Did you mean '{2}'? Add a [MapProperty] override or a [MapIgnore] to silence this.",
+        category: "AnvilMap",
+        defaultSeverity: DiagnosticSeverity.Info,
+        isEnabledByDefault: true);
+
     public static readonly DiagnosticDescriptor ProjectionCycleSkipped = new(
         id: "AM002",
         title: "Projection skipped due to mapping cycle",
