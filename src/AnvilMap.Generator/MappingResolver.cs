@@ -319,7 +319,8 @@ internal static partial class MappingResolver
                 destinationProperty.IsRequired,
                 resolution.DestinationShape,
                 DefaultValueLiteral: propertyDefault,
-                MethodHostType: conditionMethodName is null ? null : TypeModel.From(declaration.MethodHostSymbol)));
+                MethodHostType: conditionMethodName is null ? null : TypeModel.From(declaration.MethodHostSymbol),
+                EnumConversion: resolution.EnumConversion));
         }
 
         // A 'required' destination property that never made it into `properties` above (for

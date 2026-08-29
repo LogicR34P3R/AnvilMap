@@ -8,5 +8,6 @@ internal enum PropertyMappingKind
     Nested,
     Enumerable,
     Converted,
+    EnumConversion,
     Ignored
 }

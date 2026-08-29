@@ -182,4 +182,12 @@ internal static class Diagnostics
         category: "AnvilMap",
         defaultSeverity: DiagnosticSeverity.Warning,
         isEnabledByDefault: true);
+
+    public static readonly DiagnosticDescriptor EnumToStringExcludedFromProjection = new(
+        id: "AM022",
+        title: "Property excluded from SQL projection due to an enum-to-string conversion",
+        messageFormat: "Property '{0}' on '{1}' -> '{2}' converts an enum to string, which most query providers can't translate, and was left out of the SQL projection (it will be left at its default value there). The imperative mapper still emits it via .ToString().",
+        category: "AnvilMap",
+        defaultSeverity: DiagnosticSeverity.Info,
+        isEnabledByDefault: true);
 }
