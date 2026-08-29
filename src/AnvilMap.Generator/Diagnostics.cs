@@ -6,16 +6,8 @@ namespace AnvilMap.Generator;
 // never reused, only retired - see AnalyzerReleases.Shipped.md.
 internal static class Diagnostics
 {
-    // {2} is either empty or " Did you mean 'X'?" (see NameSuggestion) - a leading space is
-    // baked into the non-empty case so this format string never needs a conditional separator
-    // of its own.
-    //
-    // RS1032 checks the literal, unsubstituted format string for "looks like a clean sentence,
-    // or clean multi-sentence ending in a period" - it can't know {2} sometimes contributes a
-    // trailing sentence and sometimes contributes nothing, so it flags this shape no matter
-    // where {2} is placed. Suppressed rather than worked around, since every placement tried
-    // (mid-string, end-of-string) still substitutes to a genuinely well-formed message either
-    // way ("...value. Add..." or "...value. Did you mean 'X'? Add...").
+    // {2}: empty, or " Did you mean 'X'?" (NameSuggestion) - RS1032 can't model a message whose
+    // sentence count varies at runtime, so it's suppressed rather than worked around.
 #pragma warning disable RS1032
     public static readonly DiagnosticDescriptor UnmappedDestinationProperty = new(
         id: "AM001",

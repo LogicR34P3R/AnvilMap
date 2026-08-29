@@ -3,16 +3,11 @@ using System.Collections.Generic;
 
 namespace AnvilMap.Generator;
 
-// Cheap typo-detection for diagnostic messages (currently just AM001, Q1 in
-// docs/roadmapv4.md) - not a general string-similarity library, deliberately just a small
-// case-insensitive Levenshtein distance with a threshold, no external dependency.
+// Cheap case-insensitive Levenshtein distance for AM001's "did you mean" hint.
 internal static class NameSuggestion
 {
-    // Only worth suggesting a name close enough that it's plausibly the same typo'd property,
-    // not just the least-different name in an unrelated set - two bounds, both needed: an
-    // absolute cap (3) so long names don't accumulate an implausibly large "close enough"
-    // distance, and a relative cap (distance must be smaller than the candidate's own length) so
-    // a short name isn't suggested on what's really a coin flip.
+    // Absolute cap (3) plus a relative one (distance < candidate length) so a short name isn't
+    // suggested on what's really a coin flip.
     public static string? FindClosest(string name, IEnumerable<string> candidates)
     {
         string? best = null;
