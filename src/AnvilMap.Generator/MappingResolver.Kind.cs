@@ -53,6 +53,24 @@ internal static partial class MappingResolver
             return new KindResolution(PropertyMappingKind.Nested, null, null);
         }
 
+        // [MapTo]/[MapFrom] can't target an enum (AttributeTargets.Struct excludes it), so an
+        // enum source never has a graph entry of its own - these two are checked ahead of the
+        // general implicit-conversion fallback below only for clarity, not to avoid a conflict:
+        // both are explicit conversions in C#'s own rules (ClassifyConversion never reports
+        // IsImplicit for either), so the fallback would never have matched them anyway.
+        if (source is INamedTypeSymbol { TypeKind: TypeKind.Enum } sourceEnum)
+        {
+            if (SymbolEqualityComparer.Default.Equals(sourceEnum.EnumUnderlyingType, destination))
+            {
+                return new KindResolution(PropertyMappingKind.EnumConversion, null, null, EnumConversion: EnumConversionKind.ToUnderlyingType);
+            }
+
+            if (destination.SpecialType == SpecialType.System_String)
+            {
+                return new KindResolution(PropertyMappingKind.EnumConversion, null, null, EnumConversion: EnumConversionKind.ToString);
+            }
+        }
+
         if (compilation is CSharpCompilation csharpCompilation)
         {
             var conversion = csharpCompilation.ClassifyConversion(source, destination);
@@ -70,7 +88,8 @@ internal static partial class MappingResolver
         PropertyMappingKind? Kind,
         ITypeSymbol? ElementSource,
         ITypeSymbol? ElementDestination,
-        CollectionShape DestinationShape = CollectionShape.List);
+        CollectionShape DestinationShape = CollectionShape.List,
+        EnumConversionKind? EnumConversion = null);
 
     // Only Array/HashSet need a non-default materialize call; everything else falls back to List.
     private static CollectionShape DetermineCollectionShape(ITypeSymbol type)

@@ -224,6 +224,21 @@ Method(TSource, TDestination?)`), e.g. to only overwrite a value that isn't alre
 by the imperative mapper and `IMapper`; **not** honored by `.ProjectTo{Dest}()` — a method call
 can't be translated to SQL, so a conditioned property is left out of the projection entirely.
 
+**Enum conversions are automatic** — no `[MapUsing]` needed for an `enum` source property
+mapped to its own underlying integral type (`Status` → `int`, via a cast) or to `string` (via
+`.ToString()`). Any other mismatch (a different numeric type, `string` back to an `enum`, a
+narrowing conversion) still requires an explicit `[MapUsing]` or is reported as `AM003` — this
+generator never guesses at a lossy conversion. The `.ToString()` case is imperative-only
+(`AM022`) since most query providers can't translate it into SQL; the underlying-type cast is
+projection-safe and included in `.ProjectTo{Dest}()` too. Ordinary implicit C# conversions (`int`
+widening to `long`, `DateTime` to `DateTimeOffset`, and so on) already work without any of this —
+they're plain C# assignments, not something this generator needs to handle specially. An explicit
+`[MapUsing]` on the same property always overrides the automatic conversion — e.g. to map an enum
+to a specific string label instead of its member name via `.ToString()`, or to keep an
+enum-to-string conversion inside `.ProjectTo{Dest}()` instead of it being left out (`AM022`),
+since a `[MapUsing]` converter is inlined into the projection as-is (translatability is still your
+responsibility, same as any other `[MapUsing]`).
+
 **Compute a value from a custom method** (`[MapUsing]`) — for a destination property that
 doesn't correspond to any single source property:
 
@@ -539,6 +554,7 @@ The generator reports build-time diagnostics instead of failing silently or thro
 | AM019 | Warning | A `[MapDefault]` has no effect: it targets a nested/enumerable property, its value isn't a literal Roslyn can express as an attribute constant, or the property's type can't hold `null`. Remove it, or see `MapDefaultAttribute`'s documentation for what it supports. |
 | AM020 | Warning | `MaxDepth` has no effect: either the destination isn't built via plain mutable-property assignment (a positional record, or one with `init`-only properties, neither of which supports the depth-guard mechanism), or no property on the mapping is actually self-recursive. |
 | AM021 | Warning | An explicit `[MapProperty]` source name doesn't resolve — a plain name that isn't a top-level source property, a dotted path with a segment that doesn't exist, or one with a nullable intermediate segment. Check for a typo, or update the `[MapProperty]` if the source changed. |
+| AM022 | Info | An automatic `enum` → `string` conversion (via `.ToString()`) was left out of the SQL projection — most query providers can't translate it. The imperative mapper still applies it. |
 
 AM001, AM004, and AM009 have one-click IDE code fixes, included automatically alongside the
 generator itself — no separate package reference needed.

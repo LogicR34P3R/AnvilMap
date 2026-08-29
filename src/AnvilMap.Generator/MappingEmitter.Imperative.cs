@@ -357,6 +357,11 @@ internal static partial class MappingEmitter
             PropertyMappingKind.Converted =>
                 $"{property.MethodHostType!.FullyQualifiedName}.{property.ConverterMethodName}(source)",
 
+            PropertyMappingKind.EnumConversion =>
+                property.EnumConversion == EnumConversionKind.ToUnderlyingType
+                    ? $"({property.DestinationType.FullyQualifiedName})source.{property.SourcePropertyName}"
+                    : $"source.{property.SourcePropertyName}.ToString()",
+
             _ => null
         };
 

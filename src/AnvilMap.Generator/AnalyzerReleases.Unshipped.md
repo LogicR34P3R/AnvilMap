@@ -5,3 +5,4 @@
 
 Rule ID | Category | Severity | Notes
 --------|----------|----------|-------
+AM022 | AnvilMap | Info | Property excluded from SQL projection due to an enum-to-string conversion

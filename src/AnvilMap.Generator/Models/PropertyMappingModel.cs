@@ -26,4 +26,6 @@ internal sealed record PropertyMappingModel(
     // type for a [MapTo]-declared mapping, but possibly the destination type for a
     // [MapFrom]-declared one. Set whenever either method name is set; MappingEmitter qualifies
     // the generated call with this instead of assuming the mapping's source type.
-    TypeModel? MethodHostType = null);
+    TypeModel? MethodHostType = null,
+    // Set only for Kind == EnumConversion - which built-in conversion to emit.
+    EnumConversionKind? EnumConversion = null);

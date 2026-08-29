@@ -109,6 +109,21 @@ internal static partial class MappingEmitter
                 continue;
             }
 
+            // Same treatment as [MapCondition] above - most query providers can't translate
+            // enum.ToString() (AM022), so the column is dropped instead of aborting the whole
+            // projection. The other EnumConversion case (a numeric cast) is projection-safe and
+            // falls through to the switch below like any other plain value.
+            if (property is { Kind: PropertyMappingKind.EnumConversion, EnumConversion: EnumConversionKind.ToString })
+            {
+                report?.Invoke(Diagnostic.Create(
+                    Diagnostics.EnumToStringExcludedFromProjection,
+                    Location.None,
+                    property.DestinationPropertyName,
+                    mapping.Source.DisplayName,
+                    mapping.Destination.DisplayName));
+                continue;
+            }
+
             string? valueExpr = property.Kind switch
             {
                 PropertyMappingKind.Direct =>
@@ -122,6 +137,9 @@ internal static partial class MappingEmitter
 
                 PropertyMappingKind.Converted =>
                     $"{property.MethodHostType!.FullyQualifiedName}.{property.ConverterMethodName}({sourceExpr})",
+
+                PropertyMappingKind.EnumConversion =>
+                    $"({property.DestinationType.FullyQualifiedName}){sourceExpr}.{property.SourcePropertyName}",
 
                 _ => null
             };
