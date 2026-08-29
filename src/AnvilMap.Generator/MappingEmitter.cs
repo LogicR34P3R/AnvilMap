@@ -188,7 +188,11 @@ internal static partial class MappingEmitter
                     _ => (null, null)
                 };
 
+                // Identical element types never call a nested mapping method at all, so there's
+                // nothing here for byPair to find "orphaned" - skip, or a primitive/value
+                // element type (e.g. int) always fails this lookup and fires a false AM018.
                 if (nestedSource is null || nestedDestination is null ||
+                    nestedSource.FullyQualifiedName == nestedDestination.FullyQualifiedName ||
                     byPair.ContainsKey((nestedSource.FullyQualifiedName, nestedDestination.FullyQualifiedName)))
                 {
                     continue;

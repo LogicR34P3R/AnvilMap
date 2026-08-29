@@ -1283,6 +1283,36 @@ public sealed class BasketDto
 
         Assert.NotNull(result.GeneratedSource);
         Assert.Contains("destination.Tags = source.Tags.ToHashSet();", result.GeneratedSource);
+        // Regression: this used to spuriously fire AM018 (Error) and fail a real build - see
+        // MappingEmitter.cs's ReportOrphanedNestedMappings.
+        Assert.DoesNotContain(result.GeneratorDiagnostics, d => d.Id == "AM018");
+        AssertNoCompileErrors(result);
+    }
+
+    [Fact]
+    public void ArrayDestination_SameElementType_DoesNotFireAM018()
+    {
+        var result = GeneratorTestHelper.Run(@"
+using System.Collections.Generic;
+using AnvilMap;
+
+namespace Sample;
+
+[MapTo(typeof(BasketDto))]
+public sealed class Basket
+{
+    public List<int> Tags { get; set; } = new();
+}
+
+public sealed class BasketDto
+{
+    public int[] Tags { get; set; } = System.Array.Empty<int>();
+}
+");
+
+        Assert.NotNull(result.GeneratedSource);
+        Assert.Contains("destination.Tags = source.Tags.ToArray();", result.GeneratedSource);
+        Assert.DoesNotContain(result.GeneratorDiagnostics, d => d.Id == "AM018");
         AssertNoCompileErrors(result);
     }
 
