@@ -540,8 +540,24 @@ The generator reports build-time diagnostics instead of failing silently or thro
 | AM020 | Warning | `MaxDepth` has no effect: either the destination isn't built via plain mutable-property assignment (a positional record, or one with `init`-only properties, neither of which supports the depth-guard mechanism), or no property on the mapping is actually self-recursive. |
 | AM021 | Warning | An explicit `[MapProperty]` source name doesn't resolve — a plain name that isn't a top-level source property, a dotted path with a segment that doesn't exist, or one with a nullable intermediate segment. Check for a typo, or update the `[MapProperty]` if the source changed. |
 
-AM001, AM004, and AM009 have one-click IDE code fixes available if you also reference
-`AnvilMap.CodeFixes`.
+AM001, AM004, and AM009 have one-click IDE code fixes, included automatically alongside the
+generator itself — no separate package reference needed.
+
+### Tuning diagnostic severity
+
+Any `AMxxx` diagnostic above can be reconfigured per project via a plain `.editorconfig` entry —
+turn an `Info` up to something you'll actually notice, or silence one you've decided not to act on:
+
+```editorconfig
+[*.cs]
+dotnet_diagnostic.AM001.severity = suggestion
+dotnet_diagnostic.AM010.severity = error
+dotnet_diagnostic.AM019.severity = none
+```
+
+`severity` accepts `error`, `warning`, `suggestion`, `silent`, or `none` (fully disabled). This is
+standard `.editorconfig`/Roslyn behavior, not anything AnvilMap-specific — the same syntax works
+for any analyzer's diagnostics, `AMxxx` or otherwise.
 
 ## Native AOT
 
