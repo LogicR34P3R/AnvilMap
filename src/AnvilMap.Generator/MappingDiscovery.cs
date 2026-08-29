@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using System.Collections.Immutable;
 using System.Linq;
@@ -63,113 +64,10 @@ internal static class MappingDiscovery
                 continue;
             }
 
-            var explicitProperties = new List<ExplicitPropertyMapping>();
-
-            foreach (var attribute in mapPropertyAttributes)
-            {
-                // Defensive against invalid intermediate states (e.g. mid-edit in the IDE) -
-                // the generator runs on every keystroke.
-                if (attribute.ConstructorArguments.Length != 3 ||
-                    attribute.ConstructorArguments[0].Value is not INamedTypeSymbol propertyOtherSide)
-                {
-                    continue;
-                }
-
-                if (!SymbolEqualityComparer.Default.Equals(otherSide, propertyOtherSide))
-                {
-                    continue;
-                }
-
-                var sourceProperty = attribute.ConstructorArguments[1].Value?.ToString();
-                var destinationProperty = attribute.ConstructorArguments[2].Value?.ToString();
-
-                if (!string.IsNullOrWhiteSpace(sourceProperty) &&
-                    !string.IsNullOrWhiteSpace(destinationProperty))
-                {
-                    explicitProperties.Add(
-                        new ExplicitPropertyMapping(sourceProperty!, destinationProperty!));
-                }
-            }
-
-            var explicitConditions = new List<ExplicitConditionMapping>();
-
-            foreach (var attribute in mapConditionAttributes)
-            {
-                if (attribute.ConstructorArguments.Length != 3 ||
-                    attribute.ConstructorArguments[0].Value is not INamedTypeSymbol conditionOtherSide)
-                {
-                    continue;
-                }
-
-                if (!SymbolEqualityComparer.Default.Equals(otherSide, conditionOtherSide))
-                {
-                    continue;
-                }
-
-                var destinationProperty = attribute.ConstructorArguments[1].Value?.ToString();
-                var conditionMethod = attribute.ConstructorArguments[2].Value?.ToString();
-
-                if (!string.IsNullOrWhiteSpace(destinationProperty) &&
-                    !string.IsNullOrWhiteSpace(conditionMethod))
-                {
-                    explicitConditions.Add(
-                        new ExplicitConditionMapping(destinationProperty!, conditionMethod!));
-                }
-            }
-
-            var explicitConverters = new List<ExplicitConverterMapping>();
-
-            foreach (var attribute in mapUsingAttributes)
-            {
-                if (attribute.ConstructorArguments.Length != 3 ||
-                    attribute.ConstructorArguments[0].Value is not INamedTypeSymbol converterOtherSide)
-                {
-                    continue;
-                }
-
-                if (!SymbolEqualityComparer.Default.Equals(otherSide, converterOtherSide))
-                {
-                    continue;
-                }
-
-                var destinationProperty = attribute.ConstructorArguments[1].Value?.ToString();
-                var converterMethod = attribute.ConstructorArguments[2].Value?.ToString();
-
-                if (!string.IsNullOrWhiteSpace(destinationProperty) &&
-                    !string.IsNullOrWhiteSpace(converterMethod))
-                {
-                    explicitConverters.Add(
-                        new ExplicitConverterMapping(destinationProperty!, converterMethod!));
-                }
-            }
-
-            var explicitDefaults = new List<ExplicitDefaultMapping>();
-
-            foreach (var attribute in mapDefaultAttributes)
-            {
-                if (attribute.ConstructorArguments.Length != 3 ||
-                    attribute.ConstructorArguments[0].Value is not INamedTypeSymbol defaultOtherSide)
-                {
-                    continue;
-                }
-
-                if (!SymbolEqualityComparer.Default.Equals(otherSide, defaultOtherSide))
-                {
-                    continue;
-                }
-
-                var destinationProperty = attribute.ConstructorArguments[1].Value?.ToString();
-                var literal = FormatDefaultValueLiteral(attribute.ConstructorArguments[2]);
-
-                // literal may be null here (an unformattable constant, e.g. an array or
-                // typeof(...)) - still recorded rather than dropped, so MappingResolver can
-                // report AM019 for it instead of treating it as if [MapDefault] were never there.
-                if (!string.IsNullOrWhiteSpace(destinationProperty))
-                {
-                    explicitDefaults.Add(
-                        new ExplicitDefaultMapping(destinationProperty!, literal));
-                }
-            }
+            var explicitProperties = ExtractMatching(mapPropertyAttributes, otherSide, TryCreatePropertyMapping);
+            var explicitConditions = ExtractMatching(mapConditionAttributes, otherSide, TryCreateConditionMapping);
+            var explicitConverters = ExtractMatching(mapUsingAttributes, otherSide, TryCreateConverterMapping);
+            var explicitDefaults = ExtractMatching(mapDefaultAttributes, otherSide, TryCreateDefaultMapping);
 
             var generateReverse = mapAttribute.NamedArguments
                 .FirstOrDefault(x => x.Key == "GenerateReverse")
@@ -197,6 +95,79 @@ internal static class MappingDiscovery
         }
 
         return result.ToImmutable();
+    }
+
+    // Shared by all four companion-attribute kinds below: each one's ConstructorArguments[0]
+    // must match the current [MapTo]/[MapFrom]'s own other-side type before the rest of its
+    // arguments are even looked at - project returns null for anything that doesn't match or
+    // doesn't parse, and is only ever called with three-argument attribute shapes.
+    private static List<T> ExtractMatching<T>(
+        AttributeData[] attributes, INamedTypeSymbol otherSide, Func<AttributeData, T?> project)
+        where T : class
+    {
+        var result = new List<T>();
+
+        foreach (var attribute in attributes)
+        {
+            // Defensive against invalid intermediate states (e.g. mid-edit in the IDE) - the
+            // generator runs on every keystroke.
+            if (attribute.ConstructorArguments.Length != 3 ||
+                attribute.ConstructorArguments[0].Value is not INamedTypeSymbol candidateOtherSide ||
+                !SymbolEqualityComparer.Default.Equals(otherSide, candidateOtherSide))
+            {
+                continue;
+            }
+
+            var item = project(attribute);
+            if (item is not null)
+            {
+                result.Add(item);
+            }
+        }
+
+        return result;
+    }
+
+    private static ExplicitPropertyMapping? TryCreatePropertyMapping(AttributeData attribute)
+    {
+        var sourceProperty = attribute.ConstructorArguments[1].Value?.ToString();
+        var destinationProperty = attribute.ConstructorArguments[2].Value?.ToString();
+
+        return !string.IsNullOrWhiteSpace(sourceProperty) && !string.IsNullOrWhiteSpace(destinationProperty)
+            ? new ExplicitPropertyMapping(sourceProperty!, destinationProperty!)
+            : null;
+    }
+
+    private static ExplicitConditionMapping? TryCreateConditionMapping(AttributeData attribute)
+    {
+        var destinationProperty = attribute.ConstructorArguments[1].Value?.ToString();
+        var conditionMethod = attribute.ConstructorArguments[2].Value?.ToString();
+
+        return !string.IsNullOrWhiteSpace(destinationProperty) && !string.IsNullOrWhiteSpace(conditionMethod)
+            ? new ExplicitConditionMapping(destinationProperty!, conditionMethod!)
+            : null;
+    }
+
+    private static ExplicitConverterMapping? TryCreateConverterMapping(AttributeData attribute)
+    {
+        var destinationProperty = attribute.ConstructorArguments[1].Value?.ToString();
+        var converterMethod = attribute.ConstructorArguments[2].Value?.ToString();
+
+        return !string.IsNullOrWhiteSpace(destinationProperty) && !string.IsNullOrWhiteSpace(converterMethod)
+            ? new ExplicitConverterMapping(destinationProperty!, converterMethod!)
+            : null;
+    }
+
+    private static ExplicitDefaultMapping? TryCreateDefaultMapping(AttributeData attribute)
+    {
+        var destinationProperty = attribute.ConstructorArguments[1].Value?.ToString();
+
+        // The literal may be null here (an unformattable constant, e.g. an array or typeof(...))
+        // - still recorded rather than dropped, so MappingResolver can report AM019 for it
+        // instead of treating it as if [MapDefault] were never there.
+        return !string.IsNullOrWhiteSpace(destinationProperty)
+            ? new ExplicitDefaultMapping(destinationProperty!, FormatDefaultValueLiteral(attribute.ConstructorArguments[2]))
+            : null;
     }
 
     // A [MapDefault] constant is limited to what Roslyn allows as an attribute argument:
