@@ -1,6 +1,5 @@
 using System.Collections.Generic;
 using System.Linq;
-using System.Text;
 using Microsoft.CodeAnalysis;
 
 namespace AnvilMap.Generator;
@@ -28,7 +27,7 @@ internal static partial class MappingEmitter
     //   alone stays on shape 1 and keeps its two-arg overload, since assigning into an
     //   already-constructed instance is fine for required (only init-only is accessor-enforced).
     private static void EmitMapping(
-        StringBuilder sb,
+        CodeWriter writer,
         MappingModel mapping,
         ConsumerCapabilities capabilities,
         System.Action<Diagnostic>? report)
@@ -37,10 +36,11 @@ internal static partial class MappingEmitter
         var source = mapping.Source.FullyQualifiedName;
         var destination = mapping.Destination.FullyQualifiedName;
         var methodName = $"To{mapping.Destination.SimpleName}";
+        var (oneArgSummary, twoArgSummary) = BuildMappingSummaries(mapping);
 
         if (mapping.ConstructorParameterProperties is { Count: > 0 } constructorProperties)
         {
-            EmitConstructorBasedMapping(sb, mapping, constructorProperties, source, destination, methodName, capabilities, report);
+            EmitConstructorBasedMapping(writer, mapping, constructorProperties, source, destination, methodName, capabilities, report);
             return;
         }
 
@@ -51,32 +51,47 @@ internal static partial class MappingEmitter
             var isSelfRecursive = mapping.MaxDepth > 0 && mapping.Properties.Any(p => IsSelfRecursive(p, mapping));
             var newDestinationExpression = BuildNewDestinationExpression(mapping, destination, useNullableReferenceTypes, report);
 
-            sb.AppendLine($"    public static {destination} {methodName}(this {source} source)");
-            sb.AppendLine($"        => source.{methodName}({newDestinationExpression});");
-            sb.AppendLine();
+            writer.Summary(oneArgSummary);
+            writer.WriteLine($"public static {destination} {methodName}(this {source} source)");
+            using (writer.Indent())
+            {
+                writer.WriteLine($"=> source.{methodName}({newDestinationExpression});");
+            }
+
+            writer.WriteLine();
 
             if (!isSelfRecursive)
             {
-                sb.AppendLine($"    public static {destination} {methodName}(this {source} source, {destination} destination)");
-                sb.AppendLine("    {");
-                EmitAssignments(sb, mapping.Properties, useNullableReferenceTypes);
-                sb.AppendLine("        return destination;");
-                sb.AppendLine("    }");
-                sb.AppendLine();
+                writer.Summary(twoArgSummary);
+                writer.WriteLine($"public static {destination} {methodName}(this {source} source, {destination} destination)");
+                using (writer.Block())
+                {
+                    EmitAssignments(writer, mapping.Properties, useNullableReferenceTypes);
+                    writer.WriteLine("return destination;");
+                }
+
+                writer.WriteLine();
                 return;
             }
 
             // MaxDepth + self-reference: thread a depth counter through a private overload.
-            sb.AppendLine($"    public static {destination} {methodName}(this {source} source, {destination} destination)");
-            sb.AppendLine($"        => source.{methodName}(destination, 0);");
-            sb.AppendLine();
+            writer.Summary(twoArgSummary);
+            writer.WriteLine($"public static {destination} {methodName}(this {source} source, {destination} destination)");
+            using (writer.Indent())
+            {
+                writer.WriteLine($"=> source.{methodName}(destination, 0);");
+            }
 
-            sb.AppendLine($"    private static {destination} {methodName}(this {source} source, {destination} destination, int depth)");
-            sb.AppendLine("    {");
-            EmitAssignments(sb, mapping.Properties, useNullableReferenceTypes, mapping);
-            sb.AppendLine("        return destination;");
-            sb.AppendLine("    }");
-            sb.AppendLine();
+            writer.WriteLine();
+
+            writer.WriteLine($"private static {destination} {methodName}(this {source} source, {destination} destination, int depth)");
+            using (writer.Block())
+            {
+                EmitAssignments(writer, mapping.Properties, useNullableReferenceTypes, mapping);
+                writer.WriteLine("return destination;");
+            }
+
+            writer.WriteLine();
             return;
         }
 
@@ -95,13 +110,26 @@ internal static partial class MappingEmitter
 
         var remainingProperties = mapping.Properties.Where(p => !p.DestinationIsInitOnly && !p.DestinationIsRequired).ToList();
 
-        sb.AppendLine($"    public static {destination} {methodName}(this {source} source)");
-        sb.AppendLine("    {");
-        sb.AppendLine($"        var destination = new {destination} {{ {string.Join(", ", initializerAssignments)} }};");
-        EmitAssignments(sb, remainingProperties, useNullableReferenceTypes);
-        sb.AppendLine("        return destination;");
-        sb.AppendLine("    }");
-        sb.AppendLine();
+        writer.Summary(oneArgSummary);
+        writer.WriteLine($"public static {destination} {methodName}(this {source} source)");
+        using (writer.Block())
+        {
+            writer.WriteLine($"var destination = new {destination} {{ {string.Join(", ", initializerAssignments)} }};");
+            EmitAssignments(writer, remainingProperties, useNullableReferenceTypes);
+            writer.WriteLine("return destination;");
+        }
+
+        writer.WriteLine();
+    }
+
+    private static (string OneArg, string TwoArg) BuildMappingSummaries(MappingModel mapping)
+    {
+        var source = CodeWriter.Escape(mapping.Source.DisplayName);
+        var destination = CodeWriter.Escape(mapping.Destination.DisplayName);
+
+        return (
+            $"Maps a <c>{source}</c> to a new <c>{destination}</c>.",
+            $"Maps a <c>{source}</c> onto an existing <c>{destination}</c> instance.");
     }
 
     // constructorProperties (in constructor-parameter order) become positional arguments;
@@ -110,7 +138,7 @@ internal static partial class MappingEmitter
     // a property could go to in the object-initializer-only shape, just with the constructor
     // call taking some of them instead of `new Dest()`.
     private static void EmitConstructorBasedMapping(
-        StringBuilder sb,
+        CodeWriter writer,
         MappingModel mapping,
         IReadOnlyList<string> constructorProperties,
         string source,
@@ -150,13 +178,17 @@ internal static partial class MappingEmitter
             ? $"{constructorCall} {{ {string.Join(", ", initializerAssignments)} }}"
             : constructorCall;
 
-        sb.AppendLine($"    public static {destination} {methodName}(this {source} source)");
-        sb.AppendLine("    {");
-        sb.AppendLine($"        var destination = {construction};");
-        EmitAssignments(sb, remainingProperties, useNullableReferenceTypes);
-        sb.AppendLine("        return destination;");
-        sb.AppendLine("    }");
-        sb.AppendLine();
+        var (oneArgSummary, _) = BuildMappingSummaries(mapping);
+        writer.Summary(oneArgSummary);
+        writer.WriteLine($"public static {destination} {methodName}(this {source} source)");
+        using (writer.Block())
+        {
+            writer.WriteLine($"var destination = {construction};");
+            EmitAssignments(writer, remainingProperties, useNullableReferenceTypes);
+            writer.WriteLine("return destination;");
+        }
+
+        writer.WriteLine();
     }
 
     // Shape 1's `new Dest()` call has no properties routed through TryMatchConstructor and no
@@ -228,7 +260,7 @@ internal static partial class MappingEmitter
     // Depth guard and [MapCondition] guard are ANDed into one `if` when both apply - either
     // being false means the same thing: leave the property at its default.
     private static void EmitAssignments(
-        StringBuilder sb,
+        CodeWriter writer,
         IEnumerable<PropertyMappingModel> properties,
         bool useNullableReferenceTypes,
         MappingModel? recursionContext = null)
@@ -263,12 +295,15 @@ internal static partial class MappingEmitter
 
             if (guards.Count == 0)
             {
-                sb.AppendLine($"        destination.{property.DestinationPropertyName} = {value};");
+                writer.WriteLine($"destination.{property.DestinationPropertyName} = {value};");
                 continue;
             }
 
-            sb.AppendLine($"        if ({string.Join(" && ", guards)})");
-            sb.AppendLine($"            destination.{property.DestinationPropertyName} = {value};");
+            writer.WriteLine($"if ({string.Join(" && ", guards)})");
+            using (writer.Indent())
+            {
+                writer.WriteLine($"destination.{property.DestinationPropertyName} = {value};");
+            }
         }
     }
 

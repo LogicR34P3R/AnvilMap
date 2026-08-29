@@ -1,5 +1,4 @@
 using System.Collections.Generic;
-using System.Text;
 using Microsoft.CodeAnalysis;
 
 namespace AnvilMap.Generator;
@@ -11,7 +10,7 @@ namespace AnvilMap.Generator;
 internal static partial class MappingEmitter
 {
     private static void EmitProjection(
-        StringBuilder sb,
+        CodeWriter writer,
         MappingModel mapping,
         Dictionary<(string Source, string Destination), MappingModel> byPair,
         HashSet<(string Source, string Destination)> mappingsWithOrphanedNestedReference,
@@ -54,14 +53,20 @@ internal static partial class MappingEmitter
 
         // No inline initializer - assigned in Emit()'s shared explicit static constructor
         // instead, since an implicit one can't carry the trim-suppression attributes it needs.
-        sb.AppendLine($"    public static readonly Expression<Func<{source}, {destination}>> {fieldName};");
-        sb.AppendLine();
+        writer.WriteLine($"public static readonly Expression<Func<{source}, {destination}>> {fieldName};");
+        writer.WriteLine();
 
-        sb.AppendLine($"    public static IQueryable<{destination}> ProjectTo{simpleName}(this IQueryable<{source}> source)");
-        sb.AppendLine($"        => source.Select({fieldName});");
-        sb.AppendLine();
+        writer.Summary($"Projects a queryable of <c>{CodeWriter.Escape(mapping.Source.DisplayName)}</c> to " +
+            $"<c>{CodeWriter.Escape(mapping.Destination.DisplayName)}</c>, translatable by the query provider (e.g. EF Core).");
+        writer.WriteLine($"public static IQueryable<{destination}> ProjectTo{simpleName}(this IQueryable<{source}> source)");
+        using (writer.Indent())
+        {
+            writer.WriteLine($"=> source.Select({fieldName});");
+        }
 
-        projectionFieldInitializers.Add($"        {fieldName} = source => {body};");
+        writer.WriteLine();
+
+        projectionFieldInitializers.Add($"{fieldName} = source => {body};");
     }
 
     private static string? BuildProjectionInitializer(

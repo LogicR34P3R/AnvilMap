@@ -1,5 +1,4 @@
 using System.Collections.Generic;
-using System.Text;
 
 namespace AnvilMap.Generator;
 
@@ -11,7 +10,7 @@ namespace AnvilMap.Generator;
 internal static partial class MappingEmitter
 {
     private static void EmitGenericDispatcher(
-        StringBuilder sb,
+        CodeWriter writer,
         IReadOnlyCollection<MappingModel> mappings,
         ConsumerCapabilities capabilities)
     {
@@ -26,96 +25,128 @@ internal static partial class MappingEmitter
 
         // Emitted into the generated file itself so a consumer can see which implementation
         // they got without reading this generator's source.
-        sb.AppendLine(useFrozenDictionary
-            ? "    // System.Collections.Frozen.FrozenDictionary is available on this target framework (.NET 8+) - used below."
-            : "    // System.Collections.Frozen.FrozenDictionary is not available on this target framework (requires .NET 8+) - falling back to Dictionary.");
-        sb.AppendLine($"    private static readonly {mapType} _map =");
-        sb.AppendLine("        new Dictionary<(Type, Type), Func<object, object>>");
-        sb.AppendLine("        {");
-
-        foreach (var mapping in mappings)
+        writer.WriteLine(useFrozenDictionary
+            ? "// System.Collections.Frozen.FrozenDictionary is available on this target framework (.NET 8+) - used below."
+            : "// System.Collections.Frozen.FrozenDictionary is not available on this target framework (requires .NET 8+) - falling back to Dictionary.");
+        writer.WriteLine($"private static readonly {mapType} _map =");
+        using (writer.Indent())
         {
-            var source = mapping.Source.FullyQualifiedName;
-            var destination = mapping.Destination.FullyQualifiedName;
-            var simpleName = mapping.Destination.SimpleName;
+            writer.WriteLine("new Dictionary<(Type, Type), Func<object, object>>");
+            using (writer.Block(closeSuffix: $"{freeze};"))
+            {
+                foreach (var mapping in mappings)
+                {
+                    var source = mapping.Source.FullyQualifiedName;
+                    var destination = mapping.Destination.FullyQualifiedName;
+                    var simpleName = mapping.Destination.SimpleName;
 
-            sb.AppendLine($"            [(typeof({source}), typeof({destination}))] = s => (({source})s).To{simpleName}(),");
+                    writer.WriteLine($"[(typeof({source}), typeof({destination}))] = s => (({source})s).To{simpleName}(),");
+                }
+            }
         }
 
-        sb.AppendLine($"        }}{freeze};");
-        sb.AppendLine();
+        writer.WriteLine();
 
-        sb.AppendLine($"    private static readonly {mapIntoType} _mapInto =");
-        sb.AppendLine("        new Dictionary<(Type, Type), Func<object, object, object>>");
-        sb.AppendLine("        {");
-
-        foreach (var mapping in mappings)
+        writer.WriteLine($"private static readonly {mapIntoType} _mapInto =");
+        using (writer.Indent())
         {
-            // Mirrors the imperative emitter: no two-arg overload for init-only destinations
-            // (AM008), so there's nothing for this table to dispatch to.
-            if (HasInitOnlyProperty(mapping))
+            writer.WriteLine("new Dictionary<(Type, Type), Func<object, object, object>>");
+            using (writer.Block(closeSuffix: $"{freeze};"))
             {
-                continue;
+                foreach (var mapping in mappings)
+                {
+                    // Mirrors the imperative emitter: no two-arg overload for init-only
+                    // destinations (AM008), so there's nothing for this table to dispatch to.
+                    if (HasInitOnlyProperty(mapping))
+                    {
+                        continue;
+                    }
+
+                    var source = mapping.Source.FullyQualifiedName;
+                    var destination = mapping.Destination.FullyQualifiedName;
+                    var simpleName = mapping.Destination.SimpleName;
+
+                    writer.WriteLine($"[(typeof({source}), typeof({destination}))] = (s, d) => (({source})s).To{simpleName}(({destination})d),");
+                }
+            }
+        }
+
+        writer.WriteLine();
+
+        writer.Summary("Maps <paramref name=\"source\"/> to a new <typeparamref name=\"TDestination\"/> instance, resolved by its runtime type.");
+        writer.WriteLine("public static TDestination Map<TDestination>(object source)");
+        using (writer.Block())
+        {
+            writer.WriteLine("if (source is null) throw new ArgumentNullException(nameof(source));");
+            writer.WriteLine("if (_map.TryGetValue((source.GetType(), typeof(TDestination)), out var mapper))");
+            using (writer.Indent())
+            {
+                writer.WriteLine("return (TDestination)mapper(source);");
             }
 
-            var source = mapping.Source.FullyQualifiedName;
-            var destination = mapping.Destination.FullyQualifiedName;
-            var simpleName = mapping.Destination.SimpleName;
-
-            sb.AppendLine($"            [(typeof({source}), typeof({destination}))] = (s, d) => (({source})s).To{simpleName}(({destination})d),");
+            writer.WriteLine("throw new global::System.InvalidOperationException(");
+            using (writer.Indent())
+            {
+                writer.WriteLine("$\"No generated mapping exists from {source.GetType()} to {typeof(TDestination)}.\");");
+            }
         }
 
-        sb.AppendLine($"        }}{freeze};");
-        sb.AppendLine();
+        writer.WriteLine();
 
-        sb.AppendLine("    public static TDestination Map<TDestination>(object source)");
-        sb.AppendLine("    {");
-        sb.AppendLine("        if (source is null) throw new ArgumentNullException(nameof(source));");
-        sb.AppendLine("        if (_map.TryGetValue((source.GetType(), typeof(TDestination)), out var mapper))");
-        sb.AppendLine("            return (TDestination)mapper(source);");
-        sb.AppendLine(
-            "        throw new global::System.InvalidOperationException(");
-        sb.AppendLine(
-            "            $\"No generated mapping exists from {source.GetType()} to {typeof(TDestination)}.\");");
-        sb.AppendLine("    }");
-        sb.AppendLine();
+        writer.Summary("Maps <paramref name=\"source\"/> to a new <typeparamref name=\"TDestination\"/> instance.");
+        writer.WriteLine("public static TDestination Map<TSource, TDestination>(TSource source)");
+        using (writer.Block())
+        {
+            // `is null` against an open generic type parameter needs C# 8+ (CS8511 below that);
+            // ReferenceEquals works on every version.
+            writer.WriteLine("if (object.ReferenceEquals(source, null)) throw new ArgumentNullException(nameof(source));");
+            writer.WriteLine("if (_map.TryGetValue((source.GetType(), typeof(TDestination)), out var mapper))");
+            using (writer.Indent())
+            {
+                writer.WriteLine("return (TDestination)mapper(source);");
+            }
 
-        sb.AppendLine("    public static TDestination Map<TSource, TDestination>(TSource source)");
-        sb.AppendLine("    {");
-        // `is null` against an open generic type parameter needs C# 8+ (CS8511 below that);
-        // ReferenceEquals works on every version.
-        sb.AppendLine("        if (object.ReferenceEquals(source, null)) throw new ArgumentNullException(nameof(source));");
-        sb.AppendLine("        if (_map.TryGetValue((source.GetType(), typeof(TDestination)), out var mapper))");
-        sb.AppendLine("            return (TDestination)mapper(source);");
-        sb.AppendLine(
-            "        throw new global::System.InvalidOperationException(");
-        sb.AppendLine(
-            "            $\"No generated mapping exists from {typeof(TSource)} to {typeof(TDestination)}.\");");
-        sb.AppendLine("    }");
-        sb.AppendLine();
+            writer.WriteLine("throw new global::System.InvalidOperationException(");
+            using (writer.Indent())
+            {
+                writer.WriteLine("$\"No generated mapping exists from {typeof(TSource)} to {typeof(TDestination)}.\");");
+            }
+        }
 
-        sb.AppendLine("    public static TDestination Map<TSource, TDestination>(TSource source, TDestination destination)");
-        sb.AppendLine("    {");
-        sb.AppendLine("        if (object.ReferenceEquals(source, null)) throw new ArgumentNullException(nameof(source));");
-        sb.AppendLine("        if (object.ReferenceEquals(destination, null)) throw new ArgumentNullException(nameof(destination));");
-        sb.AppendLine("        if (_mapInto.TryGetValue((source.GetType(), destination.GetType()), out var mapper))");
-        sb.AppendLine("            return (TDestination)mapper(source, destination);");
-        sb.AppendLine(
-            "        throw new global::System.InvalidOperationException(");
-        sb.AppendLine(
-            "            $\"No generated mapping exists from {typeof(TSource)} to {typeof(TDestination)}.\");");
-        sb.AppendLine("    }");
+        writer.WriteLine();
+
+        writer.Summary("Maps <paramref name=\"source\"/> into the existing <paramref name=\"destination\"/> instance, overwriting its mapped properties in place.");
+        writer.WriteLine("public static TDestination Map<TSource, TDestination>(TSource source, TDestination destination)");
+        using (writer.Block())
+        {
+            writer.WriteLine("if (object.ReferenceEquals(source, null)) throw new ArgumentNullException(nameof(source));");
+            writer.WriteLine("if (object.ReferenceEquals(destination, null)) throw new ArgumentNullException(nameof(destination));");
+            writer.WriteLine("if (_mapInto.TryGetValue((source.GetType(), destination.GetType()), out var mapper))");
+            using (writer.Indent())
+            {
+                writer.WriteLine("return (TDestination)mapper(source, destination);");
+            }
+
+            writer.WriteLine("throw new global::System.InvalidOperationException(");
+            using (writer.Indent())
+            {
+                writer.WriteLine("$\"No generated mapping exists from {typeof(TSource)} to {typeof(TDestination)}.\");");
+            }
+        }
     }
 
-    private static void EmitMapperService(StringBuilder sb, IReadOnlyCollection<MappingModel> mappings)
+    private static void EmitMapperService(CodeWriter writer, IReadOnlyCollection<MappingModel> mappings)
     {
-        sb.AppendLine("public sealed class AnvilMapService : global::AnvilMap.IMapper");
-        sb.AppendLine("{");
-        sb.AppendLine("    public TDestination Map<TDestination>(object source) => GeneratedMappings.Map<TDestination>(source);");
-        sb.AppendLine();
-        sb.AppendLine("    public TDestination Map<TSource, TDestination>(TSource source) => GeneratedMappings.Map<TSource, TDestination>(source);");
-        sb.AppendLine();
-        sb.AppendLine("    public TDestination Map<TSource, TDestination>(TSource source, TDestination destination) => GeneratedMappings.Map<TSource, TDestination>(source, destination);");
-        sb.AppendLine("}");
+        using (writer.Block("public sealed class AnvilMapService : global::AnvilMap.IMapper"))
+        {
+            writer.WriteLine("/// <inheritdoc/>");
+            writer.WriteLine("public TDestination Map<TDestination>(object source) => GeneratedMappings.Map<TDestination>(source);");
+            writer.WriteLine();
+            writer.WriteLine("/// <inheritdoc/>");
+            writer.WriteLine("public TDestination Map<TSource, TDestination>(TSource source) => GeneratedMappings.Map<TSource, TDestination>(source);");
+            writer.WriteLine();
+            writer.WriteLine("/// <inheritdoc/>");
+            writer.WriteLine("public TDestination Map<TSource, TDestination>(TSource source, TDestination destination) => GeneratedMappings.Map<TSource, TDestination>(source, destination);");
+        }
     }
 }
