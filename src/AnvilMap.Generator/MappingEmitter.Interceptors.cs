@@ -1,5 +1,4 @@
 using System.Collections.Generic;
-using System.Text;
 
 namespace AnvilMap.Generator;
 
@@ -18,7 +17,7 @@ internal static partial class MappingEmitter
     // Returns whether anything was actually emitted, so the caller knows whether the separate
     // InterceptsLocation polyfill (a top-level type outside `namespace AnvilMap`) is needed.
     private static bool EmitInterceptors(
-        StringBuilder sb,
+        CodeWriter writer,
         IReadOnlyCollection<InterceptedMapCall> interceptedCalls,
         ConsumerCapabilities capabilities,
         IReadOnlyDictionary<(string Source, string Destination), MappingModel> byPair)
@@ -64,61 +63,65 @@ internal static partial class MappingEmitter
             return false;
         }
 
-        sb.AppendLine();
-        sb.AppendLine("    // Intercepts direct GeneratedMappings.Map<TSource,TDestination>(...) calls the generator");
-        sb.AppendLine("    // found statically visible in this consumer's source, redirecting them straight to the concrete");
-        sb.AppendLine("    // To{Dest}() method - additive only, the dispatcher above still handles everything else.");
-        sb.AppendLine("    file static class Interceptors");
-        sb.AppendLine("    {");
-
-        var index = 0;
-        foreach (var group in groups)
+        writer.WriteLine();
+        writer.WriteLine("// Intercepts direct GeneratedMappings.Map<TSource,TDestination>(...) calls the generator");
+        writer.WriteLine("// found statically visible in this consumer's source, redirecting them straight to the concrete");
+        writer.WriteLine("// To{Dest}() method - additive only, the dispatcher above still handles everything else.");
+        using (writer.Block("file static class Interceptors"))
         {
-            var (sourceTypeName, destinationTypeName, isTwoArg) = group.Key;
-            var mapping = byPair[(sourceTypeName, destinationTypeName)];
-            var destinationSimpleName = mapping.Destination.SimpleName;
-
-            foreach (var call in group.Value)
+            var index = 0;
+            foreach (var group in groups)
             {
-                sb.AppendLine($"        [System.Runtime.CompilerServices.InterceptsLocation({call.LocationVersion}, \"{call.LocationData}\")]");
-            }
+                var (sourceTypeName, destinationTypeName, isTwoArg) = group.Key;
+                var mapping = byPair[(sourceTypeName, destinationTypeName)];
+                var destinationSimpleName = mapping.Destination.SimpleName;
 
-            var methodName = $"Intercepted_{destinationSimpleName}_{index++}";
+                foreach (var call in group.Value)
+                {
+                    writer.WriteLine($"[System.Runtime.CompilerServices.InterceptsLocation({call.LocationVersion}, \"{call.LocationData}\")]");
+                }
 
-            if (isTwoArg)
-            {
-                sb.AppendLine($"        public static {destinationTypeName} {methodName}({sourceTypeName} source, {destinationTypeName} destination)");
-                sb.AppendLine($"            => source.To{destinationSimpleName}(destination);");
-            }
-            else
-            {
-                sb.AppendLine($"        public static {destinationTypeName} {methodName}({sourceTypeName} source)");
-                sb.AppendLine($"            => source.To{destinationSimpleName}();");
-            }
+                var methodName = $"Intercepted_{destinationSimpleName}_{index++}";
 
-            sb.AppendLine();
+                if (isTwoArg)
+                {
+                    writer.WriteLine($"public static {destinationTypeName} {methodName}({sourceTypeName} source, {destinationTypeName} destination)");
+                    using (writer.Indent())
+                    {
+                        writer.WriteLine($"=> source.To{destinationSimpleName}(destination);");
+                    }
+                }
+                else
+                {
+                    writer.WriteLine($"public static {destinationTypeName} {methodName}({sourceTypeName} source)");
+                    using (writer.Indent())
+                    {
+                        writer.WriteLine($"=> source.To{destinationSimpleName}();");
+                    }
+                }
+
+                writer.WriteLine();
+            }
         }
-
-        sb.AppendLine("    }");
 
         return true;
     }
 
-    private static void EmitInterceptsLocationPolyfill(StringBuilder sb)
+    private static void EmitInterceptsLocationPolyfill(CodeWriter writer)
     {
         // The BCL never exposes InterceptsLocationAttribute publicly, on any TFM (confirmed
         // empirically - CS0246 even on a plain net10.0 console app) - the compiler recognizes it
         // purely by this namespace+name, so a `file`-scoped self-declared definition is both
         // necessary and safe (invisible outside this generated file, so it can never collide with
         // another generator's own polyfill of the same attribute in a different generated file).
-        sb.AppendLine();
-        sb.AppendLine("namespace System.Runtime.CompilerServices");
-        sb.AppendLine("{");
-        sb.AppendLine("    [AttributeUsage(AttributeTargets.Method, AllowMultiple = true)]");
-        sb.AppendLine("    file sealed class InterceptsLocationAttribute : Attribute");
-        sb.AppendLine("    {");
-        sb.AppendLine("        public InterceptsLocationAttribute(int version, string data) { }");
-        sb.AppendLine("    }");
-        sb.AppendLine("}");
+        writer.WriteLine();
+        using (writer.Block("namespace System.Runtime.CompilerServices"))
+        {
+            writer.WriteLine("[AttributeUsage(AttributeTargets.Method, AllowMultiple = true)]");
+            using (writer.Block("file sealed class InterceptsLocationAttribute : Attribute"))
+            {
+                writer.WriteLine("public InterceptsLocationAttribute(int version, string data) { }");
+            }
+        }
     }
 }
