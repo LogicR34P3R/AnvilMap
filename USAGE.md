@@ -312,7 +312,11 @@ destination declares (`List<T>`, `T[]`, `HashSet<T>`/`ISet<T>`, `ImmutableArray<
 excluded from `.ProjectTo{Dest}()` with `AM023`, since they aren't confirmed translatable by SQL
 query providers the way `List<T>`/`T[]`/`HashSet<T>` are. A destination collection shape this
 generator doesn't recognize (and that `List<T>` doesn't already implicitly convert to) reports
-`AM003` instead of emitting code that wouldn't compile.
+`AM003` instead of emitting code that wouldn't compile. Note that a `[MapUsing]` override doesn't
+rescue this the way it does for `AM022` (below): AnvilMap emits `[MapUsing]` as a method call in
+the projection, which EF Core's translator can't see into regardless of what the method's body
+does — wrapping `.ToImmutableArray()`/`new ObservableCollection<T>(...)` in your own converter
+doesn't make it any more translatable than the automatic version.
 
 ## Naming-convention flattening
 
