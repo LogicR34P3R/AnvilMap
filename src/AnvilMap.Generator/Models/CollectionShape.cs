@@ -4,5 +4,7 @@ internal enum CollectionShape
 {
     List,
     Array,
-    HashSet
+    HashSet,
+    ImmutableArray,
+    ObservableCollection
 }
