@@ -1,5 +1,3 @@
-using Microsoft.CodeAnalysis;
-
 namespace AnvilMap.Generator.Tests;
 
 // Naming-convention flattening. Covers the resolver-side path matching only - MappingEmitter

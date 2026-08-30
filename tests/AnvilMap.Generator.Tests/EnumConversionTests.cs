@@ -1,5 +1,3 @@
-using Microsoft.CodeAnalysis;
-
 namespace AnvilMap.Generator.Tests;
 
 public class EnumConversionTests
