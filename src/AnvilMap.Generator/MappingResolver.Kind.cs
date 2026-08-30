@@ -23,10 +23,9 @@ internal static partial class MappingResolver
         }
 
         if (TryGetEnumerableElement(source, out var sourceElement) &&
-            TryGetEnumerableElement(destination, out var destinationElement))
+            TryGetEnumerableElement(destination, out var destinationElement) &&
+            DetermineCollectionShape(compilation, destinationElement, destination) is { } destinationShape)
         {
-            var destinationShape = DetermineCollectionShape(destination);
-
             if (SymbolEqualityComparer.Default.Equals(sourceElement, destinationElement))
             {
                 return new KindResolution(PropertyMappingKind.Enumerable, sourceElement, destinationElement, destinationShape);
@@ -91,21 +90,24 @@ internal static partial class MappingResolver
         CollectionShape DestinationShape = CollectionShape.List,
         EnumConversionKind? EnumConversion = null);
 
-    // Only Array/HashSet need a non-default materialize call; everything else falls back to List.
-    private static CollectionShape DetermineCollectionShape(ITypeSymbol type)
+    // Null (not a silent List default) when List<elementType> isn't actually assignable to
+    // destination - e.g. Dictionary<K,V>/IReadOnlyDictionary<K,V> both pass
+    // TryGetEnumerableElement's fallback but don't accept a `.ToList()`. The caller falls
+    // through to the rest of ResolveKind instead of emitting code that won't compile.
+    private static CollectionShape? DetermineCollectionShape(Compilation compilation, ITypeSymbol elementType, ITypeSymbol destination)
     {
-        if (type is IArrayTypeSymbol)
+        if (destination is IArrayTypeSymbol)
         {
             return CollectionShape.Array;
         }
 
-        if (type is INamedTypeSymbol { IsGenericType: true } named &&
+        if (destination is INamedTypeSymbol { IsGenericType: true } named &&
             named.Name is "HashSet" or "ISet" or "IReadOnlySet")
         {
             return CollectionShape.HashSet;
         }
 
-        foreach (var iface in type.AllInterfaces)
+        foreach (var iface in destination.AllInterfaces)
         {
             if (iface.Name is "ISet" or "IReadOnlySet")
             {
@@ -113,7 +115,18 @@ internal static partial class MappingResolver
             }
         }
 
-        return CollectionShape.List;
+        if (compilation is CSharpCompilation csharpCompilation &&
+            compilation.GetTypeByMetadataName("System.Collections.Generic.List`1") is { } listDefinition)
+        {
+            var listType = listDefinition.Construct(elementType);
+
+            if (csharpCompilation.ClassifyConversion(listType, destination).IsImplicit)
+            {
+                return CollectionShape.List;
+            }
+        }
+
+        return null;
     }
 
     private static bool TryGetNamedType(ITypeSymbol type, out INamedTypeSymbol named)
