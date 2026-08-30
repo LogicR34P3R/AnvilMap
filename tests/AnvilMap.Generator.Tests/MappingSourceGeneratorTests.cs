@@ -1317,6 +1317,66 @@ public sealed class BasketDto
     }
 
     [Fact]
+    public void DictionaryToReadOnlyDictionary_ResolvesAsDirectAssignmentInsteadOfBrokenToList()
+    {
+        // Regression: used to be misdetected as Enumerable-of-KeyValuePair and get a `.ToList()`
+        // that doesn't compile against IReadOnlyDictionary.
+        var result = GeneratorTestHelper.Run(@"
+using System.Collections.Generic;
+using AnvilMap;
+
+namespace Sample;
+
+[MapTo(typeof(BasketDto))]
+public sealed class Basket
+{
+    public Dictionary<string, int> Lookup { get; set; } = new();
+}
+
+public sealed class BasketDto
+{
+    public IReadOnlyDictionary<string, int> Lookup { get; set; } = new Dictionary<string, int>();
+}
+");
+
+        Assert.NotNull(result.GeneratedSource);
+        Assert.Contains("destination.Lookup = source.Lookup;", result.GeneratedSource);
+        Assert.DoesNotContain(".ToList()", result.GeneratedSource);
+        GeneratorTestHelper.AssertNoUnexpectedErrors(result);
+    }
+
+    [Fact]
+    public void UnsupportedCollectionDestination_ReportsAM003InsteadOfEmittingUncompilableToList()
+    {
+        // ImmutableArray<T> isn't a recognized shape - must fail closed (AM003), not silently
+        // emit a `.ToList()` that doesn't compile.
+        var result = GeneratorTestHelper.Run(@"
+using System.Collections.Generic;
+using System.Collections.Immutable;
+using AnvilMap;
+
+namespace Sample;
+
+[MapTo(typeof(BasketDto))]
+public sealed class Basket
+{
+    public List<int> Numbers { get; set; } = new();
+}
+
+public sealed class BasketDto
+{
+    public ImmutableArray<int> Numbers { get; set; }
+}
+");
+
+        Assert.NotNull(result.GeneratedSource);
+        Assert.Contains(result.GeneratorDiagnostics, d => d.Id == "AM003" && d.Severity == DiagnosticSeverity.Error && d.GetMessage().Contains("Numbers"));
+        Assert.DoesNotContain("destination.Numbers", result.GeneratedSource);
+        Assert.DoesNotContain(".ToList()", result.GeneratedSource);
+        GeneratorTestHelper.AssertNoUnexpectedErrors(result, "AM003");
+    }
+
+    [Fact]
     public void MaxDepth_DoesNotGuardIndirectMutualCycleAcrossDifferentMappings()
     {
         var result = GeneratorTestHelper.Run(@"
