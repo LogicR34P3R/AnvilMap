@@ -18,6 +18,16 @@ internal static partial class MappingEmitter
         HashSet<string> destinationTypesUsingBind,
         System.Action<Diagnostic>? report)
     {
+        if (mapping.Includes is { Count: > 0 })
+        {
+            report?.Invoke(Diagnostic.Create(
+                Diagnostics.PolymorphicProjectionUnsupported,
+                Location.None,
+                mapping.Source.DisplayName,
+                mapping.Destination.DisplayName));
+            return;
+        }
+
         // `visiting` guards against infinite recursion on a cyclic mapping graph; hitting an
         // already-visiting pair aborts the whole projection rather than truncating it.
         var visiting = new HashSet<(string, string)>();
@@ -78,6 +88,12 @@ internal static partial class MappingEmitter
         System.Action<Diagnostic>? report)
     {
         var pairKey = (mapping.Source.FullyQualifiedName, mapping.Destination.FullyQualifiedName);
+
+        // Also catches a nested/element reference to a polymorphic mapping declared elsewhere.
+        if (mapping.Includes is { Count: > 0 })
+        {
+            return null;
+        }
 
         if (!visiting.Add(pairKey))
         {

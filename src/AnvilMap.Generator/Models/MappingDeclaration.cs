@@ -25,13 +25,14 @@ internal sealed record MappingDeclaration(
     IReadOnlyList<ExplicitConditionMapping> ExplicitConditions,
     IReadOnlyList<ExplicitConverterMapping> ExplicitConverters,
     IReadOnlyList<ExplicitDefaultMapping> ExplicitDefaults,
-    int MaxDepth = 0)
+    int MaxDepth = 0,
+    IReadOnlyList<ExplicitIncludeMapping>? ExplicitIncludes = null)
 {
     // Declares each field's reversal behavior next to the record itself, so a future field
     // addition has to be a visible, greppable decision here rather than a silent gap in
-    // MappingGraph's reverse-construction call site. Conditions/converters/defaults reset to
-    // empty - all three are tied to the original source type, so a reverse mapping needs its
-    // own [MapCondition]/[MapUsing]/[MapDefault]. MaxDepth carries over unchanged.
+    // MappingGraph's reverse-construction call site. Conditions/converters/defaults/includes
+    // reset to empty - all are tied to the original source type, so a reverse mapping needs its
+    // own [MapCondition]/[MapUsing]/[MapDefault]/[MapInclude]. MaxDepth carries over unchanged.
     // MethodHostSymbol is left unchanged (still the original declaring type) - inert either
     // way since the explicit collections below are wiped, but it's the closest thing to "where
     // a reverse-direction attribute would be declared" if one existed.
@@ -48,5 +49,6 @@ internal sealed record MappingDeclaration(
         ExplicitConditions = Array.Empty<ExplicitConditionMapping>(),
         ExplicitConverters = Array.Empty<ExplicitConverterMapping>(),
         ExplicitDefaults = Array.Empty<ExplicitDefaultMapping>(),
+        ExplicitIncludes = Array.Empty<ExplicitIncludeMapping>(),
     };
 }

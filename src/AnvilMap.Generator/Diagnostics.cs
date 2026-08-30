@@ -198,4 +198,52 @@ internal static class Diagnostics
         category: "AnvilMap",
         defaultSeverity: DiagnosticSeverity.Info,
         isEnabledByDefault: true);
+
+    public static readonly DiagnosticDescriptor GenerateReverseWithMapIncludeUnsupported = new(
+        id: "AM024",
+        title: "GenerateReverse is not supported on a [MapInclude] mapping",
+        messageFormat: "'{0}' -> '{1}' combines GenerateReverse with [MapInclude], which isn't supported - reversing a polymorphic type-switch has no runtime-type signal to switch back on without a discriminator property. The forward mapping is still generated; declare a separate reverse [MapTo]/[MapFrom] manually if one is needed, or remove GenerateReverse.",
+        category: "AnvilMap",
+        defaultSeverity: DiagnosticSeverity.Warning,
+        isEnabledByDefault: true);
+
+    public static readonly DiagnosticDescriptor MapIncludeNotDerived = new(
+        id: "AM025",
+        title: "[MapInclude] type isn't derived from the base mapping's source/destination",
+        messageFormat: "The [MapInclude] naming '{0}' / '{1}' requires both to derive directly (single level) from '{2}' / '{3}' respectively - this include was skipped",
+        category: "AnvilMap",
+        defaultSeverity: DiagnosticSeverity.Error,
+        isEnabledByDefault: true);
+
+    public static readonly DiagnosticDescriptor MapIncludeMissingOwnMapping = new(
+        id: "AM026",
+        title: "[MapInclude] derived pair has no mapping of its own",
+        messageFormat: "The [MapInclude] naming '{0}' -> '{1}' was skipped because that pair has no [MapTo]/[MapFrom] declaration of its own - declare one, or remove this [MapInclude]",
+        category: "AnvilMap",
+        defaultSeverity: DiagnosticSeverity.Error,
+        isEnabledByDefault: true);
+
+    public static readonly DiagnosticDescriptor TwoArgMapperOmittedPolymorphic = new(
+        id: "AM027",
+        title: "Two-argument mapper omitted for a polymorphic [MapInclude] mapping",
+        messageFormat: "The two-argument '{2}(source, destination)' overload (and the IMapper .Map(source, destination) overload) were omitted for '{0}' -> '{1}' because it's a polymorphic [MapInclude] mapping - there's no way to populate a caller-supplied '{1}' instance as if it were a derived instance instead. Use '{2}(source)' or Map<TDestination>(source) instead.",
+        category: "AnvilMap",
+        defaultSeverity: DiagnosticSeverity.Info,
+        isEnabledByDefault: true);
+
+    public static readonly DiagnosticDescriptor PolymorphicProjectionUnsupported = new(
+        id: "AM028",
+        title: "SQL projection not generated for a polymorphic [MapInclude] mapping",
+        messageFormat: "A SQL projection for '{0}' -> '{1}' was not generated because it's a polymorphic [MapInclude] mapping - a runtime type-switch can't be expressed as a query-provider-translatable expression. The imperative mapping method is still available; use it after materializing results from the database.",
+        category: "AnvilMap",
+        defaultSeverity: DiagnosticSeverity.Info,
+        isEnabledByDefault: true);
+
+    public static readonly DiagnosticDescriptor DuplicateMapInclude = new(
+        id: "AM029",
+        title: "Duplicate [MapInclude] for the same derived source type",
+        messageFormat: "'{0}' -> '{1}' has more than one [MapInclude] naming '{2}' as the derived source - only the last one encountered is used. Two switch arms for the same derived type would fail to compile (CS8510, unreachable pattern); remove all but one, or make sure they agree.",
+        category: "AnvilMap",
+        defaultSeverity: DiagnosticSeverity.Warning,
+        isEnabledByDefault: true);
 }

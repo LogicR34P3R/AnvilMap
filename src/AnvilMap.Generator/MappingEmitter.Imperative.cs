@@ -38,6 +38,12 @@ internal static partial class MappingEmitter
         var methodName = $"To{mapping.Destination.SimpleName}";
         var (oneArgSummary, twoArgSummary) = BuildMappingSummaries(mapping);
 
+        if (mapping.Includes is { Count: > 0 } includes)
+        {
+            EmitPolymorphicMapping(writer, mapping, includes, source, destination, methodName, oneArgSummary, useNullableReferenceTypes, report);
+            return;
+        }
+
         if (mapping.ConstructorParameterProperties is { Count: > 0 } constructorProperties)
         {
             EmitConstructorBasedMapping(writer, mapping, constructorProperties, source, destination, methodName, capabilities, report);
@@ -156,27 +162,8 @@ internal static partial class MappingEmitter
             mapping.Destination.DisplayName,
             methodName));
 
-        var byName = mapping.Properties.ToDictionary(p => p.DestinationPropertyName);
-        var constructorSet = new HashSet<string>(constructorProperties);
-
-        // Every name in constructorProperties is guaranteed present, unconditioned, and
-        // resolvable - MappingResolver.TryMatchConstructor only returns a match when that
-        // holds for all of them.
-        var constructorArgs = constructorProperties
-            .Select(name => BuildValueExpression(byName[name], useNullableReferenceTypes)!);
-
-        // Broadened to also pick up any required-but-mutable property not already claimed by
-        // the constructor call, alongside the init-only ones (see the class-level note).
-        var initializerAssignments = BuildMustInitializeAssignments(mapping, mapping.Properties, constructorSet, useNullableReferenceTypes, report);
-
-        var remainingProperties = mapping.Properties
-            .Where(p => !p.DestinationIsInitOnly && !p.DestinationIsRequired && !constructorSet.Contains(p.DestinationPropertyName))
-            .ToList();
-
-        var constructorCall = $"new {destination}({string.Join(", ", constructorArgs)})";
-        var construction = initializerAssignments.Count > 0
-            ? $"{constructorCall} {{ {string.Join(", ", initializerAssignments)} }}"
-            : constructorCall;
+        var (construction, remainingProperties) = BuildConstructorBasedConstruction(
+            mapping, constructorProperties, destination, useNullableReferenceTypes, report);
 
         var (oneArgSummary, _) = BuildMappingSummaries(mapping);
         writer.Summary(oneArgSummary);
@@ -203,6 +190,128 @@ internal static partial class MappingEmitter
         return assignments.Count > 0
             ? $"new {destination} {{ {string.Join(", ", assignments)} }}"
             : $"new {destination}()";
+    }
+
+    private static (string Construction, List<PropertyMappingModel> RemainingProperties) BuildConstructorBasedConstruction(
+        MappingModel mapping,
+        IReadOnlyList<string> constructorProperties,
+        string destination,
+        bool useNullableReferenceTypes,
+        System.Action<Diagnostic>? report)
+    {
+        var byName = mapping.Properties.ToDictionary(p => p.DestinationPropertyName);
+        var constructorSet = new HashSet<string>(constructorProperties);
+
+        // Every name in constructorProperties is guaranteed present, unconditioned, and
+        // resolvable - MappingResolver.TryMatchConstructor only returns a match when that
+        // holds for all of them.
+        var constructorArgs = constructorProperties
+            .Select(name => BuildValueExpression(byName[name], useNullableReferenceTypes)!);
+
+        var initializerAssignments = BuildMustInitializeAssignments(mapping, mapping.Properties, constructorSet, useNullableReferenceTypes, report);
+
+        var remainingProperties = mapping.Properties
+            .Where(p => !p.DestinationIsInitOnly && !p.DestinationIsRequired && !constructorSet.Contains(p.DestinationPropertyName))
+            .ToList();
+
+        var constructorCall = $"new {destination}({string.Join(", ", constructorArgs)})";
+        var construction = initializerAssignments.Count > 0
+            ? $"{constructorCall} {{ {string.Join(", ", initializerAssignments)} }}"
+            : constructorCall;
+
+        return (construction, remainingProperties);
+    }
+
+    private static (string Construction, List<PropertyMappingModel> RemainingProperties) BuildInitOnlyConstruction(
+        MappingModel mapping, string destination, bool useNullableReferenceTypes, System.Action<Diagnostic>? report)
+    {
+        var initializerAssignments = BuildMustInitializeAssignments(mapping, mapping.Properties, exclude: null, useNullableReferenceTypes, report);
+        var remainingProperties = mapping.Properties.Where(p => !p.DestinationIsInitOnly && !p.DestinationIsRequired).ToList();
+        var construction = $"new {destination} {{ {string.Join(", ", initializerAssignments)} }}";
+
+        return (construction, remainingProperties);
+    }
+
+    // Emits a public one-arg dispatcher (`source switch { Dog d => d.ToDogDto(), ..., _ =>
+    // source.ToAnimalDtoBase() }`) plus a private base-case helper - never a two-arg overload
+    // (AM027). Self-recursion (MaxDepth) isn't threaded through the base helper; see AM020.
+    private static void EmitPolymorphicMapping(
+        CodeWriter writer,
+        MappingModel mapping,
+        IReadOnlyList<PolymorphicIncludeModel> includes,
+        string source,
+        string destination,
+        string methodName,
+        string oneArgSummary,
+        bool useNullableReferenceTypes,
+        System.Action<Diagnostic>? report)
+    {
+        report?.Invoke(Diagnostic.Create(
+            Diagnostics.TwoArgMapperOmittedPolymorphic,
+            Location.None,
+            mapping.Source.DisplayName,
+            mapping.Destination.DisplayName,
+            methodName));
+
+        var baseMethodName = $"{methodName}Base";
+
+        writer.Summary(oneArgSummary);
+        writer.WriteLine($"public static {destination} {methodName}(this {source} source)");
+        using (writer.Indent())
+        {
+            writer.WriteLine("=> source switch");
+            using (writer.Block(closeSuffix: ";"))
+            {
+                foreach (var include in includes)
+                {
+                    writer.WriteLine($"{include.DerivedSource.FullyQualifiedName} d => d.To{include.DerivedDestination.SimpleName}(),");
+                }
+
+                writer.WriteLine($"_ => source.{baseMethodName}()");
+            }
+        }
+
+        writer.WriteLine();
+
+        EmitPolymorphicBaseMethod(writer, mapping, source, destination, baseMethodName, useNullableReferenceTypes, report);
+    }
+
+    private static void EmitPolymorphicBaseMethod(
+        CodeWriter writer,
+        MappingModel mapping,
+        string source,
+        string destination,
+        string baseMethodName,
+        bool useNullableReferenceTypes,
+        System.Action<Diagnostic>? report)
+    {
+        string construction;
+        List<PropertyMappingModel> remainingProperties;
+
+        if (mapping.ConstructorParameterProperties is { Count: > 0 } constructorProperties)
+        {
+            (construction, remainingProperties) = BuildConstructorBasedConstruction(
+                mapping, constructorProperties, destination, useNullableReferenceTypes, report);
+        }
+        else if (mapping.Properties.Any(p => p.DestinationIsInitOnly))
+        {
+            (construction, remainingProperties) = BuildInitOnlyConstruction(mapping, destination, useNullableReferenceTypes, report);
+        }
+        else
+        {
+            construction = BuildNewDestinationExpression(mapping, destination, useNullableReferenceTypes, report);
+            remainingProperties = mapping.Properties.ToList();
+        }
+
+        writer.WriteLine($"private static {destination} {baseMethodName}(this {source} source)");
+        using (writer.Block())
+        {
+            writer.WriteLine($"var destination = {construction};");
+            EmitAssignments(writer, remainingProperties, useNullableReferenceTypes);
+            writer.WriteLine("return destination;");
+        }
+
+        writer.WriteLine();
     }
 
     // Builds `Name = value` entries for every property that must be set within the same

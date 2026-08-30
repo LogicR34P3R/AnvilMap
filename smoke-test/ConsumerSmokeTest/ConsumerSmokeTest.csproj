@@ -4,20 +4,34 @@
        AnvilMap NuGet packages from a local feed (nuget.config, next to this file) exactly
        the way a real external consumer would, via a plain `<PackageReference>` - never as a
        ProjectReference/analyzer wired in directly like the rest of this repo does. See
-       .github/workflows/ci.yml's "Smoke-test packages" step. -->
+       .github/workflows/ci.yml's "Smoke-test packages" step.
+
+       Multi-targeted net8.0;net10.0: net8.0's default LangVersion is the "no interceptor"
+       control, net10.0 exercises real interceptor-based dispatch, and neither needs an
+       explicit <LangVersion> override since InterceptorsNamespaces is auto-injected by the
+       packed AnvilMap.Generator.props either way. -->
   <PropertyGroup>
     <OutputType>Exe</OutputType>
-    <TargetFramework>net8.0</TargetFramework>
+    <TargetFrameworks>net8.0;net10.0</TargetFrameworks>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <IsPackable>false</IsPackable>
     <!-- Opts out of the root Directory.Packages.props: a real external consumer doesn't have
          this repo's central version file, so this project pins its own version inline. -->
     <ManagePackageVersionsCentrally>false</ManagePackageVersionsCentrally>
+
+    <!-- $(TargetFramework) kept in the path so this project's own code can locate the right
+         TFM's generated output on disk without one multi-targeted build overwriting another's. -->
+    <EmitCompilerGeneratedFiles>true</EmitCompilerGeneratedFiles>
+    <CompilerGeneratedFilesOutputPath>Generated\$(TargetFramework)</CompilerGeneratedFilesOutputPath>
   </PropertyGroup>
 
   <ItemGroup>
     <PackageReference Include="AnvilMap.Generator" Version="1.0.0" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Compile Remove="Generated\**\*.cs" />
   </ItemGroup>
 
 </Project>

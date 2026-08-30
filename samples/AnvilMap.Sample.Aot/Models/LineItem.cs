@@ -1,8 +1,5 @@
-using AnvilMap.Sample.Aot.ViewModels;
-
 namespace AnvilMap.Sample.Aot.Models;
 
-[MapTo(typeof(LineItemDto))]
 public sealed class LineItem
 {
     public string ProductName { get; set; } = "";

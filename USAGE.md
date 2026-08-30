@@ -490,6 +490,101 @@ than you need: a single declaration with `GenerateReverse = true` (as in the pre
 directions. Reach for the combined `[MapFrom]`+`[MapTo]` form only when the two directions genuinely need
 independent configuration.
 
+## Polymorphic mapping
+
+If your source type has an inheritance hierarchy and you want a runtime-derived instance to
+produce a correspondingly richer DTO — a `Dog` should map to a `DogDto` carrying `Breed`, not a
+base `AnimalDto` that's missing it — declare one `[MapInclude]` per derived pair on the base
+mapping:
+
+```csharp
+[MapTo(typeof(AnimalDto))]
+[MapInclude(typeof(AnimalDto), typeof(Dog), typeof(DogDto))]
+[MapInclude(typeof(AnimalDto), typeof(Cat), typeof(CatDto))]
+public class Animal
+{
+    public string Name { get; set; } = "";
+}
+
+[MapTo(typeof(DogDto))]
+public class Dog : Animal
+{
+    public string Breed { get; set; } = "";
+}
+
+[MapTo(typeof(CatDto))]
+public class Cat : Animal
+{
+    public bool IsIndoor { get; set; }
+}
+
+public class AnimalDto
+{
+    public string Name { get; set; } = "";
+}
+
+public class DogDto : AnimalDto
+{
+    public string Breed { get; set; } = "";
+}
+
+public class CatDto : AnimalDto
+{
+    public bool IsIndoor { get; set; }
+}
+```
+
+`animal.ToAnimalDto()` now dispatches on the source's runtime type: a `Dog` instance produces a
+`DogDto`, a `Cat` instance produces a `CatDto`, and anything else falls back to the plain
+`AnimalDto` mapping. `[MapInclude]`'s three arguments are the base mapping's own destination type
+(needed since `[MapTo]` allows more than one destination per source), the derived source type,
+and the derived destination type.
+
+Each derived pair (`Dog`/`DogDto`, `Cat`/`CatDto`) needs its own ordinary `[MapTo]`/`[MapFrom]`
+declaration — `[MapInclude]` only wires an already-declared mapping into the base type's dispatch,
+it doesn't declare one itself; a pair with no mapping of its own is `AM026`. Both the derived
+source and derived destination must derive directly (one level) from the base mapping's own
+source/destination — checked independently, so a derived source that's correctly related but
+whose derived destination *isn't* still reports `AM025`, same as the reverse. A deeper hierarchy
+(`Puppy : Dog : Animal`) isn't supported yet — naming `Puppy` directly on `Animal` also reports
+`AM025`. Naming the same derived source in more than one `[MapInclude]` is `AM029`; only the last
+one is used, since two identical switch arms would otherwise fail to compile.
+
+Like `[MapProperty]`/`[MapCondition]`/`[MapUsing]`/`[MapDefault]`, `[MapInclude]` can also be
+declared alongside `[MapFrom]` on the destination side instead of alongside `[MapTo]` on the
+source — in that case its first argument names the *source* type (matching `[MapFrom]`'s own
+argument), not the destination:
+
+```csharp
+[MapFrom(typeof(Animal))]
+[MapInclude(typeof(Animal), typeof(Dog), typeof(DogDto))]
+public class AnimalDto { /* ... */ }
+```
+
+A `[MapInclude]`-carrying mapping doesn't generate a two-argument `To{Dest}(source, destination)`
+overload (`AM027`) — there's no way to populate a caller-supplied `AnimalDto` instance as if it
+were a `DogDto` instead — and doesn't generate a `ProjectTo{Dest}()` SQL projection (`AM028`) —
+a runtime type-switch can't be expressed as a query-provider-translatable expression tree. The
+imperative `To{Dest}()` method is otherwise a normal, complete mapping method; use it after
+materializing query results if you need the polymorphic dispatch on data that came from a
+projection.
+
+The generic dispatcher (`GeneratedMappings.Map<TDestination>(source)`, `IMapper.Map(...)`)
+supports polymorphic dispatch too: a `Dog` handed in as a plain `object`/`Animal` still produces a
+`DogDto`, resolved by the source's actual runtime type, not whatever static type the caller
+happened to use.
+
+`GenerateReverse` isn't supported together with `[MapInclude]` (`AM024`) — reversing a type-switch
+has no runtime-type signal to switch back on without a discriminator property. Declare a separate
+reverse `[MapTo]`/`[MapFrom]` by hand if you need one.
+
+`MaxDepth` also isn't supported together with `[MapInclude]` — reported the same way as combining
+it with a positional record or `init`-only destination (`AM020`, "MaxDepth has no effect"). Take
+that warning seriously here specifically: unlike most `AM020` cases, which are genuinely inert,
+ignoring it on a polymorphic mapping with an actually-cyclic runtime graph crashes with an
+uncatchable `StackOverflowException` — the depth guard is silently never applied to the
+base-case fallback, so nothing stops the recursion.
+
 ## Init-only and record destinations
 
 A destination with `init`-only properties (including non-positional `record` types) is built via
@@ -561,10 +656,16 @@ The generator reports build-time diagnostics instead of failing silently or thro
 | AM017 | Warning | The same destination property is targeted by more than one `[MapProperty]`, `[MapCondition]`, `[MapUsing]`, or `[MapDefault]` in this mapping — only the last one encountered is used. Remove all but one, or make sure they agree. |
 | AM018 | Error | A `Nested`/`Enumerable` property's own mapping was itself skipped (e.g. by `AM006`), so there's no generated method to call — the generated code will fail to compile. Fix whatever skipped that mapping (see its own diagnostic), or add a `[MapIgnore]` here. |
 | AM019 | Warning | A `[MapDefault]` has no effect: it targets a nested/enumerable property, its value isn't a literal Roslyn can express as an attribute constant, or the property's type can't hold `null`. Remove it, or see `MapDefaultAttribute`'s documentation for what it supports. |
-| AM020 | Warning | `MaxDepth` has no effect: either the destination isn't built via plain mutable-property assignment (a positional record, or one with `init`-only properties, neither of which supports the depth-guard mechanism), or no property on the mapping is actually self-recursive. |
+| AM020 | Warning | `MaxDepth` has no effect: either the destination isn't built via plain mutable-property assignment (a positional record, one with `init`-only properties, or a polymorphic `[MapInclude]` mapping, none of which support the depth-guard mechanism), or no property on the mapping is actually self-recursive. |
 | AM021 | Warning | An explicit `[MapProperty]` source name doesn't resolve — a plain name that isn't a top-level source property, a dotted path with a segment that doesn't exist, or one with a nullable intermediate segment. Check for a typo, or update the `[MapProperty]` if the source changed. |
 | AM022 | Info | An automatic `enum` → `string` conversion (via `.ToString()`) was left out of the SQL projection — most query providers can't translate it. The imperative mapper still applies it. |
 | AM023 | Info | An `ImmutableArray<T>`/`ObservableCollection<T>` destination property was left out of the SQL projection — not confirmed translatable by SQL query providers. The imperative mapper still materializes it. |
+| AM024 | Warning | `GenerateReverse` was combined with `[MapInclude]`, which isn't supported — reversing a type-switch has no runtime-type signal to switch back on without a discriminator property. The forward mapping is still generated. |
+| AM025 | Error | A `[MapInclude]`'s derived source/destination type doesn't derive directly (one level) from the base mapping's own source/destination — that include was skipped. |
+| AM026 | Error | A `[MapInclude]`'s derived pair has no `[MapTo]`/`[MapFrom]` declaration of its own — that include was skipped. |
+| AM027 | Info | The two-argument `To{Dest}(source, destination)` overload was omitted because it's a polymorphic `[MapInclude]` mapping. |
+| AM028 | Info | The SQL projection was skipped because it's a polymorphic `[MapInclude]` mapping — a runtime type-switch can't be expressed as a translatable expression. |
+| AM029 | Warning | The same derived source type is named by more than one `[MapInclude]` on this mapping — only the last one is used. |
 
 AM001, AM004, and AM009 have one-click IDE code fixes, included automatically alongside the
 generator itself — no separate package reference needed.
@@ -617,7 +718,8 @@ dispatch" section for the full reasoning and measured numbers.
 ## What it doesn't do
 
 Straightforward entity↔DTO shapes are the target use case. Not supported: dictionary mapping,
-polymorphic/inheritance mapping, async mapping, before/after-map hooks, or DI-injected custom
+transitive (multi-level) polymorphic dispatch (`[MapInclude]` only sees one level of inheritance —
+see "Polymorphic mapping" above), async mapping, before/after-map hooks, or DI-injected custom
 converters (`[MapUsing]` is static-only, by design — no runtime service resolution, matching the
 "no runtime cost, no runtime surprises" goal). `MaxDepth` only guards direct self-reference, not
 a cycle spanning two different `[MapTo]` declarations.

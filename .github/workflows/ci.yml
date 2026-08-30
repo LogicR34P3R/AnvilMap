@@ -46,10 +46,12 @@ jobs:
       # building/running it. smoke-test/ConsumerSmokeTest is a real,
       # tracked, minimal console project kept outside AnvilMap.sln for exactly this: its
       # nuget.config points at ../../nupkg-out (this step's output), so restoring it here
-      # reproduces the same check on every push/PR.
+      # reproduces the same check on every push/PR. Multi-targeted net8.0;net10.0 - run once per
+      # TFM, since dotnet run can't infer one on a multi-targeted project.
       - name: Smoke-test packages from a separate consumer project
         working-directory: smoke-test/ConsumerSmokeTest
         run: |
           rm -rf bin obj
           dotnet nuget locals all --clear
-          dotnet run -c Release
+          dotnet run -c Release -f net8.0
+          dotnet run -c Release -f net10.0

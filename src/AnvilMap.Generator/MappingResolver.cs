@@ -48,9 +48,11 @@ internal static partial class MappingResolver
             .ToDictionary(g => g.Key, g => g.Last().DefaultValueLiteral);
 
         // Write-only properties (no getter) can't be a mapping source, so excluded here.
-        var sourceProperties = source.GetMembers()
-            .OfType<IPropertySymbol>()
-            .Where(p => !p.IsStatic && p.GetMethod is not null)
+        // GetInstanceProperties (not source.GetMembers() directly) also picks up properties
+        // inherited from a base class - load-bearing for F16's polymorphic [MapInclude] pairs,
+        // whose whole premise is a derived source type reusing its base's shared properties.
+        var sourceProperties = GetInstanceProperties(source)
+            .Where(p => p.GetMethod is not null)
             .ToDictionary(p => p.Name);
 
         var properties = new List<PropertyMappingModel>();
@@ -58,13 +60,8 @@ internal static partial class MappingResolver
         // Tries each strategy in order: [MapUsing] converter, name match, kind resolution,
         // then [MapCondition] gate. Unmatched properties are reported (AM001/AM003/AM004/
         // AM009) and left out.
-        foreach (var destinationProperty in destination.GetMembers().OfType<IPropertySymbol>())
+        foreach (var destinationProperty in GetInstanceProperties(destination))
         {
-            if (destinationProperty.IsStatic)
-            {
-                continue;
-            }
-
             if (destinationProperty.SetMethod is null)
             {
                 continue;
@@ -332,9 +329,9 @@ internal static partial class MappingResolver
         // regardless, as an Error, since it's a guaranteed downstream compile failure.
         var mappedPropertyNames = new HashSet<string>(properties.Select(p => p.DestinationPropertyName));
 
-        foreach (var destinationProperty in destination.GetMembers().OfType<IPropertySymbol>())
+        foreach (var destinationProperty in GetInstanceProperties(destination))
         {
-            if (destinationProperty.IsStatic || destinationProperty.SetMethod is null)
+            if (destinationProperty.SetMethod is null)
             {
                 continue;
             }
@@ -360,13 +357,16 @@ internal static partial class MappingResolver
             ? null
             : TryMatchConstructor(destination, properties);
 
+        var includes = ResolveIncludes(graph, declaration, report);
+
         return new MappingModel(
             declaration.Source,
             declaration.Destination,
             properties,
             hasParameterlessConstructor,
             declaration.MaxDepth,
-            constructorParameterProperties);
+            constructorParameterProperties,
+            includes);
     }
 
     // Flags a destination property named by more than one instance of the same property-level
@@ -494,6 +494,29 @@ internal static partial class MappingResolver
     // a non-nullable struct) can never be null.
     private static bool CanCoalesceNull(ITypeSymbol type)
         => type.IsReferenceType || (type.IsValueType && type.OriginalDefinition.SpecialType == SpecialType.System_Nullable_T);
+
+    // GetMembers() alone only returns members declared directly on `type`, not ones inherited
+    // from a base class - walking the chain here is needed for an ordinary mapping whose source
+    // or destination has a base class at all, and load-bearing for F16's polymorphic
+    // [MapInclude] pairs specifically, whose whole premise is a derived type reusing shared
+    // properties declared on the common base rather than redeclaring them. Deduplicated by name,
+    // most-derived declaration wins (mirrors ordinary member-hiding semantics) - a `new`-hiding
+    // property is a rare edge case, not specially handled beyond that.
+    private static IEnumerable<IPropertySymbol> GetInstanceProperties(INamedTypeSymbol type)
+    {
+        var seen = new HashSet<string>();
+
+        for (var current = type; current is not null; current = current.BaseType)
+        {
+            foreach (var property in current.GetMembers().OfType<IPropertySymbol>())
+            {
+                if (!property.IsStatic && seen.Add(property.Name))
+                {
+                    yield return property;
+                }
+            }
+        }
+    }
 
     // Compilation.GetTypeByMetadataName's expected format: '+' between nested types, '.'
     // between namespace segments - unlike ToDisplayString, which uses '.' for both. Shared by

@@ -176,6 +176,9 @@ internal static partial class MappingEmitter
     private static bool HasInitOnlyProperty(MappingModel mapping)
         => mapping.Properties.Any(p => p.DestinationIsInitOnly);
 
+    private static bool HasNoTwoArgOverload(MappingModel mapping)
+        => HasInitOnlyProperty(mapping) || mapping.Includes is { Count: > 0 };
+
     // Returns the (source, destination) key of every validMappings entry that has at least one
     // Nested/Enumerable property whose own referenced mapping isn't in byPair - used by
     // EmitProjection to tell that case apart from an actual cycle. A self-recursive property
@@ -225,13 +228,11 @@ internal static partial class MappingEmitter
         return affected;
     }
 
-    // MaxDepth's depth-guard is only ever threaded through the plain mutable-property shape in
-    // MappingEmitter.Imperative.cs's EmitMapping (ConstructorParameterProperties is null and no
-    // property is init-only) - EmitConstructorBasedMapping (positional records) and the
-    // init-only object-initializer shape never pass a recursionContext at all, regardless of
-    // MaxDepth. Reports AM020 for that mismatch, and for MaxDepth set on a mapping with no
-    // actually self-recursive property (IsSelfRecursive, shared with EmitMapping via this
-    // partial class) - both are "you configured this, it does nothing" rather than a crash risk.
+    // MaxDepth's depth-guard is only threaded through the plain mutable-property shape - a
+    // constructor-based, init-only, or polymorphic destination never gets a recursionContext,
+    // regardless of MaxDepth. Reports AM020 for that mismatch, and for MaxDepth set on a mapping
+    // with no actually self-recursive property - ignoring this warning on a genuine reference
+    // cycle crashes with an uncatchable StackOverflowException, confirmed empirically.
     private static void ReportIneffectiveMaxDepth(IReadOnlyCollection<MappingModel> validMappings, Action<Diagnostic>? report)
     {
         foreach (var mapping in validMappings)
@@ -242,10 +243,11 @@ internal static partial class MappingEmitter
             }
 
             var supportsGuard = mapping.ConstructorParameterProperties is null &&
-                !mapping.Properties.Any(p => p.DestinationIsInitOnly);
+                !mapping.Properties.Any(p => p.DestinationIsInitOnly) &&
+                mapping.Includes is not { Count: > 0 };
 
             string? reason = !supportsGuard
-                ? "the destination isn't built via plain mutable-property assignment (it has init-only properties, or is constructed through a matched constructor), which the depth-guard mechanism doesn't support"
+                ? "the destination isn't built via plain mutable-property assignment (it has init-only properties, is constructed through a matched constructor, or is a polymorphic [MapInclude] mapping), which the depth-guard mechanism doesn't support"
                 : !mapping.Properties.Any(p => IsSelfRecursive(p, mapping))
                     ? "no property on this mapping is actually self-recursive (maps back to this same source/destination pair), so there's nothing to guard against"
                     : null;

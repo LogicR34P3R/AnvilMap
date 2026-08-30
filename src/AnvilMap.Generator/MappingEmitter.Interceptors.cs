@@ -44,7 +44,7 @@ internal static partial class MappingEmitter
                 continue; // No resolved mapping for this pair - leave it to the dictionary dispatcher.
             }
 
-            if (call.IsTwoArgOverload && HasInitOnlyProperty(mapping))
+            if (call.IsTwoArgOverload && HasNoTwoArgOverload(mapping))
             {
                 continue; // Mirrors _mapInto's own skip in MappingEmitter.Dispatcher.cs - no two-arg To{Dest}() exists to redirect to.
             }

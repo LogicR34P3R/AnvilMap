@@ -458,6 +458,119 @@ public static class Caller
         Assert.IsType<InvalidOperationException>(ex.InnerException);
     }
 
+    private const string PolymorphicOneArgCallSource = @"
+using AnvilMap;
+
+namespace Sample;
+
+[MapTo(typeof(AnimalDto))]
+[MapInclude(typeof(AnimalDto), typeof(Dog), typeof(DogDto))]
+public class Animal
+{
+    public string Name { get; set; } = """";
+}
+
+[MapTo(typeof(DogDto))]
+public sealed class Dog : Animal
+{
+    public string Breed { get; set; } = """";
+}
+
+public class AnimalDto
+{
+    public string Name { get; set; } = """";
+}
+
+public sealed class DogDto : AnimalDto
+{
+    public string Breed { get; set; } = """";
+}
+
+public static class Caller
+{
+    public static AnimalDto CallDirect(Animal animal) => GeneratedMappings.Map<Animal, AnimalDto>(animal);
+}
+";
+
+    private const string PolymorphicTwoArgCallSource = @"
+using AnvilMap;
+
+namespace Sample;
+
+[MapTo(typeof(AnimalDto))]
+[MapInclude(typeof(AnimalDto), typeof(Dog), typeof(DogDto))]
+public class Animal
+{
+    public string Name { get; set; } = """";
+}
+
+[MapTo(typeof(DogDto))]
+public sealed class Dog : Animal
+{
+    public string Breed { get; set; } = """";
+}
+
+public class AnimalDto
+{
+    public string Name { get; set; } = """";
+}
+
+public sealed class DogDto : AnimalDto
+{
+    public string Breed { get; set; } = """";
+}
+
+public static class Caller
+{
+    public static AnimalDto CallDirectTwoArg(Animal animal, AnimalDto destination) => GeneratedMappings.Map<Animal, AnimalDto>(animal, destination);
+}
+";
+
+    [Fact]
+    public void DirectStaticCall_PolymorphicMapping_EmitsInterceptorAndStillDispatchesToTheCorrectDerivedType()
+    {
+        var result = GeneratorTestHelper.Run(PolymorphicOneArgCallSource, References(), InterceptorsEnabled(LanguageVersion.CSharp14));
+
+        Assert.Contains("file static class Interceptors", result.GeneratedSource);
+        Assert.Contains("System.Runtime.CompilerServices.InterceptsLocation(", result.GeneratedSource);
+        Assert.Empty(result.CompilationDiagnostics.Where(d => d.Severity == DiagnosticSeverity.Error));
+
+        Assert.NotNull(result.Assembly);
+        var callerType = result.Assembly!.GetType("Sample.Caller")!;
+        var dogType = result.Assembly!.GetType("Sample.Dog")!;
+        var dogDtoType = result.Assembly!.GetType("Sample.DogDto")!;
+        var dog = Activator.CreateInstance(dogType)!;
+        dogType.GetProperty("Name")!.SetValue(dog, "Rex");
+        dogType.GetProperty("Breed")!.SetValue(dog, "Labrador");
+
+        var dto = callerType.GetMethod("CallDirect")!.Invoke(null, new[] { dog });
+
+        Assert.IsType(dogDtoType, dto);
+        Assert.Equal("Rex", dogDtoType.GetProperty("Name")!.GetValue(dto));
+        Assert.Equal("Labrador", dogDtoType.GetProperty("Breed")!.GetValue(dto));
+    }
+
+    [Fact]
+    public void TwoArgOverload_PolymorphicMapping_NeverIntercepted_DictionaryPathThrowsUnchanged()
+    {
+        var result = GeneratorTestHelper.Run(PolymorphicTwoArgCallSource, References(), InterceptorsEnabled(LanguageVersion.CSharp14));
+
+        Assert.DoesNotContain("InterceptsLocation", result.GeneratedSource);
+        Assert.DoesNotContain("class Interceptors", result.GeneratedSource);
+        Assert.Empty(result.CompilationDiagnostics.Where(d => d.Severity == DiagnosticSeverity.Error));
+
+        Assert.NotNull(result.Assembly);
+        var callerType = result.Assembly!.GetType("Sample.Caller")!;
+        var animalType = result.Assembly!.GetType("Sample.Animal")!;
+        var animalDtoType = result.Assembly!.GetType("Sample.AnimalDto")!;
+        var animal = Activator.CreateInstance(animalType)!;
+        var destination = Activator.CreateInstance(animalDtoType)!;
+
+        var ex = Assert.Throws<TargetInvocationException>(() =>
+            callerType.GetMethod("CallDirectTwoArg")!.Invoke(null, new[] { animal, destination }));
+        Assert.IsType<InvalidOperationException>(ex.InnerException);
+    }
+
     private static int CountOccurrences(string text, string token)
     {
         var count = 0;
