@@ -11,4 +11,5 @@ internal static class GeneratorConstants
     public const string MapConditionAttribute = "AnvilMap.MapConditionAttribute";
     public const string MapUsingAttribute = "AnvilMap.MapUsingAttribute";
     public const string MapDefaultAttribute = "AnvilMap.MapDefaultAttribute";
+    public const string MapIncludeAttribute = "AnvilMap.MapIncludeAttribute";
 }

@@ -51,6 +51,10 @@ internal static class MappingDiscovery
             .Where(a => a.AttributeClass?.ToDisplayString() == GeneratorConstants.MapDefaultAttribute)
             .ToArray();
 
+        var mapIncludeAttributes = declaringSymbol.GetAttributes()
+            .Where(a => a.AttributeClass?.ToDisplayString() == GeneratorConstants.MapIncludeAttribute)
+            .ToArray();
+
         var result = ImmutableArray.CreateBuilder<MappingDeclaration>();
 
         // Each [MapTo]/[MapFrom] names its own other-side type, so per-property attributes
@@ -68,6 +72,7 @@ internal static class MappingDiscovery
             var explicitConditions = ExtractMatching(mapConditionAttributes, otherSide, TryCreateConditionMapping);
             var explicitConverters = ExtractMatching(mapUsingAttributes, otherSide, TryCreateConverterMapping);
             var explicitDefaults = ExtractMatching(mapDefaultAttributes, otherSide, TryCreateDefaultMapping);
+            var explicitIncludes = ExtractMatching(mapIncludeAttributes, otherSide, TryCreateIncludeMapping);
 
             var generateReverse = mapAttribute.NamedArguments
                 .FirstOrDefault(x => x.Key == "GenerateReverse")
@@ -91,7 +96,8 @@ internal static class MappingDiscovery
                 explicitConditions,
                 explicitConverters,
                 explicitDefaults,
-                maxDepth));
+                maxDepth,
+                explicitIncludes));
         }
 
         return result.ToImmutable();
@@ -168,6 +174,21 @@ internal static class MappingDiscovery
         return !string.IsNullOrWhiteSpace(destinationProperty)
             ? new ExplicitDefaultMapping(destinationProperty!, FormatDefaultValueLiteral(attribute.ConstructorArguments[2]))
             : null;
+    }
+
+    private static ExplicitIncludeMapping? TryCreateIncludeMapping(AttributeData attribute)
+    {
+        if (attribute.ConstructorArguments[1].Value is not INamedTypeSymbol derivedSource ||
+            attribute.ConstructorArguments[2].Value is not INamedTypeSymbol derivedDestination)
+        {
+            return null;
+        }
+
+        return new ExplicitIncludeMapping(
+            TypeModel.From(derivedSource),
+            TypeModel.From(derivedDestination),
+            derivedSource,
+            derivedDestination);
     }
 
     // A [MapDefault] constant is limited to what Roslyn allows as an attribute argument:

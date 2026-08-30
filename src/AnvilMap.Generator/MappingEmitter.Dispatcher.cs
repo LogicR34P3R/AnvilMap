@@ -41,6 +41,16 @@ internal static partial class MappingEmitter
                     var simpleName = mapping.Destination.SimpleName;
 
                     writer.WriteLine($"[(typeof({source}), typeof({destination}))] = s => (({source})s).To{simpleName}(),");
+
+                    // Keyed by source.GetType() (the runtime type), so a derived type needs its
+                    // own entry too, or polymorphic dispatch through this table would never find it.
+                    if (mapping.Includes is { Count: > 0 } includes)
+                    {
+                        foreach (var include in includes)
+                        {
+                            writer.WriteLine($"[(typeof({include.DerivedSource.FullyQualifiedName}), typeof({destination}))] = s => (({include.DerivedSource.FullyQualifiedName})s).To{include.DerivedDestination.SimpleName}(),");
+                        }
+                    }
                 }
             }
         }
@@ -56,8 +66,9 @@ internal static partial class MappingEmitter
                 foreach (var mapping in mappings)
                 {
                     // Mirrors the imperative emitter: no two-arg overload for init-only
-                    // destinations (AM008), so there's nothing for this table to dispatch to.
-                    if (HasInitOnlyProperty(mapping))
+                    // destinations (AM008) or a polymorphic [MapInclude] mapping (AM027), so
+                    // there's nothing for this table to dispatch to.
+                    if (HasNoTwoArgOverload(mapping))
                     {
                         continue;
                     }

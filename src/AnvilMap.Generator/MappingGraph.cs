@@ -21,6 +21,16 @@ internal sealed class MappingGraph
             return;
         }
 
+        if (declaration.ExplicitIncludes is { Count: > 0 })
+        {
+            report?.Invoke(Diagnostic.Create(
+                Diagnostics.GenerateReverseWithMapIncludeUnsupported,
+                declaration.MethodHostSymbol.Locations.FirstOrDefault() ?? Location.None,
+                declaration.Source.DisplayName,
+                declaration.Destination.DisplayName));
+            return;
+        }
+
         // Not routed back through Add() - GenerateReverse itself is never true on a synthesized
         // reverse (see MappingDeclaration.ToReverse), so this can't recurse.
         Insert(declaration.ToReverse(), report);
