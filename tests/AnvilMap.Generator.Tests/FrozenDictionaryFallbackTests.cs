@@ -76,8 +76,7 @@ public sealed class UserDto
             "private static readonly Dictionary<(Type Source, Type Destination), Func<object, object, object>> _mapInto =",
             result.GeneratedSource);
 
-        var errors = result.CompilationDiagnostics.Where(d => d.Severity == DiagnosticSeverity.Error).ToList();
-        Assert.True(errors.Count == 0, string.Join("\n", errors.Select(e => e.ToString())));
+        GeneratorTestHelper.AssertNoUnexpectedErrors(result);
     }
 
     [Fact]

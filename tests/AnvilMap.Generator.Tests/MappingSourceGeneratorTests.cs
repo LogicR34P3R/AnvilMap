@@ -31,7 +31,7 @@ public sealed class UserDto
         Assert.Contains("public static global::Sample.UserDto ToUserDto(this global::Sample.User source)", result.GeneratedSource);
         Assert.Contains("destination.Id = source.Id;", result.GeneratedSource);
         Assert.Contains("destination.Name = source.Name;", result.GeneratedSource);
-        AssertNoCompileErrors(result);
+        GeneratorTestHelper.AssertNoUnexpectedErrors(result);
     }
 
     [Fact]
@@ -57,7 +57,7 @@ public sealed class UserDto
 
         Assert.NotNull(result.GeneratedSource);
         Assert.Contains("destination.EmailAddress = source.Email;", result.GeneratedSource);
-        AssertNoCompileErrors(result);
+        GeneratorTestHelper.AssertNoUnexpectedErrors(result);
     }
 
     [Fact]
@@ -85,7 +85,7 @@ public sealed class UserDto
 
         Assert.NotNull(result.GeneratedSource);
         Assert.DoesNotContain("ComputedOnly", result.GeneratedSource);
-        AssertNoCompileErrors(result);
+        GeneratorTestHelper.AssertNoUnexpectedErrors(result);
     }
 
     [Fact]
@@ -111,7 +111,7 @@ public sealed class UserDto
         Assert.NotNull(result.GeneratedSource);
         Assert.Contains("ToUserDto(this global::Sample.User source)", result.GeneratedSource);
         Assert.Contains("ToUser(this global::Sample.UserDto source)", result.GeneratedSource);
-        AssertNoCompileErrors(result);
+        GeneratorTestHelper.AssertNoUnexpectedErrors(result);
     }
 
     [Fact]
@@ -147,7 +147,7 @@ public sealed class UserDto
 
         Assert.NotNull(result.GeneratedSource);
         Assert.Contains("destination.HomeAddress = source.HomeAddress?.ToAddressDto()!;", result.GeneratedSource);
-        AssertNoCompileErrors(result);
+        GeneratorTestHelper.AssertNoUnexpectedErrors(result);
     }
 
     [Fact]
@@ -184,7 +184,7 @@ public sealed class BasketDto
 
         Assert.NotNull(result.GeneratedSource);
         Assert.Contains("destination.Items = source.Items.Select(x => x.ToItemDto()).ToList();", result.GeneratedSource);
-        AssertNoCompileErrors(result);
+        GeneratorTestHelper.AssertNoUnexpectedErrors(result);
     }
 
     [Fact]
@@ -223,7 +223,7 @@ public sealed class BasketDto
         Assert.Contains("Expression<Func<global::Sample.Basket, global::Sample.BasketDto>> BasketToBasketDtoProjection", result.GeneratedSource);
         Assert.Contains("Items = source.Items.Select(x => new global::Sample.ItemDto { Id = x.Id }).ToList()", result.GeneratedSource);
         Assert.Contains("ProjectToBasketDto(this IQueryable<global::Sample.Basket> source)", result.GeneratedSource);
-        AssertNoCompileErrors(result);
+        GeneratorTestHelper.AssertNoUnexpectedErrors(result);
     }
 
     [Fact]
@@ -269,7 +269,7 @@ public sealed class BDto
         // The imperative (non-projection) mappings still work for acyclic data at runtime.
         Assert.Contains("ToADto(this global::Sample.A source)", result.GeneratedSource);
         Assert.Contains("ToBDto(this global::Sample.B source)", result.GeneratedSource);
-        AssertNoCompileErrors(result);
+        GeneratorTestHelper.AssertNoUnexpectedErrors(result);
     }
 
     [Fact]
@@ -344,7 +344,7 @@ public sealed class UserDto
         Assert.NotNull(result.GeneratedSource);
         Assert.Contains(result.GeneratorDiagnostics, d => d.Id == "AM003" && d.Severity == DiagnosticSeverity.Error);
         Assert.DoesNotContain("destination.Code", result.GeneratedSource);
-        AssertNoCompileErrors(result);
+        GeneratorTestHelper.AssertNoUnexpectedErrors(result, "AM003");
     }
 
     [Fact]
@@ -374,7 +374,7 @@ public sealed class PostDto
         Assert.NotNull(result.GeneratedSource);
         Assert.Contains("if (global::Sample.Post.ShouldMapBody(source))", result.GeneratedSource);
         Assert.Contains("destination.Body = source.Body;", result.GeneratedSource);
-        AssertNoCompileErrors(result);
+        GeneratorTestHelper.AssertNoUnexpectedErrors(result);
     }
 
     [Fact]
@@ -402,7 +402,7 @@ public sealed class PostDto
 
         Assert.NotNull(result.GeneratedSource);
         Assert.Contains("if (global::Sample.Post.ShouldMapBody(source, destination))", result.GeneratedSource);
-        AssertNoCompileErrors(result);
+        GeneratorTestHelper.AssertNoUnexpectedErrors(result);
     }
 
     [Fact]
@@ -429,7 +429,7 @@ public sealed class PostDto
         Assert.NotNull(result.GeneratedSource);
         Assert.Contains(result.GeneratorDiagnostics, d => d.Id == "AM004" && d.Severity == DiagnosticSeverity.Error);
         Assert.DoesNotContain("destination.Body", result.GeneratedSource);
-        AssertNoCompileErrors(result);
+        GeneratorTestHelper.AssertNoUnexpectedErrors(result, "AM004");
     }
 
     [Fact]
@@ -463,7 +463,7 @@ public sealed class PostDto
         Assert.Contains("ProjectToPostDto(this IQueryable<global::Sample.Post> source)", result.GeneratedSource);
         // Only Id survives into the projection initializer — Body was excluded, not the whole projection.
         Assert.Contains("source => new global::Sample.PostDto { Id = source.Id };", result.GeneratedSource);
-        AssertNoCompileErrors(result);
+        GeneratorTestHelper.AssertNoUnexpectedErrors(result);
     }
 
     [Fact]
@@ -496,7 +496,7 @@ public sealed class PostDto
         Assert.Contains("[(typeof(global::Sample.Post), typeof(global::Sample.PostDto))] = s => ((global::Sample.Post)s).ToPostDto(),", result.GeneratedSource);
         Assert.Contains("public sealed class AnvilMapService : global::AnvilMap.IMapper", result.GeneratedSource);
         Assert.Contains("if (global::Sample.Post.ShouldMapBody(source))", result.GeneratedSource);
-        AssertNoCompileErrors(result);
+        GeneratorTestHelper.AssertNoUnexpectedErrors(result);
     }
 
     [Fact]
@@ -526,7 +526,7 @@ public sealed record UserDto
         Assert.Contains("var destination = new global::Sample.UserDto { Id = source.Id, Name = source.Name };", result.GeneratedSource);
         Assert.DoesNotContain("ToUserDto(this global::Sample.User source, global::Sample.UserDto destination)", result.GeneratedSource);
         Assert.Contains(result.GeneratorDiagnostics, d => d.Id == "AM008");
-        AssertNoCompileErrors(result);
+        GeneratorTestHelper.AssertNoUnexpectedErrors(result);
     }
 
     [Fact]
@@ -554,7 +554,7 @@ public sealed class UserDto
         Assert.NotNull(result.GeneratedSource);
         Assert.Contains("var destination = new global::Sample.UserDto { Id = source.Id };", result.GeneratedSource);
         Assert.Contains("destination.Name = source.Name;", result.GeneratedSource);
-        AssertNoCompileErrors(result);
+        GeneratorTestHelper.AssertNoUnexpectedErrors(result);
     }
 
     [Fact]
@@ -582,7 +582,7 @@ public sealed record UserDto(int Id, string Name);
         Assert.DoesNotContain("ToUserDto(this global::Sample.User source, global::Sample.UserDto destination)", result.GeneratedSource);
         Assert.Contains(result.GeneratorDiagnostics, d => d.Id == "AM008");
         Assert.DoesNotContain(result.GeneratorDiagnostics, d => d.Id == "AM006");
-        AssertNoCompileErrors(result);
+        GeneratorTestHelper.AssertNoUnexpectedErrors(result);
     }
 
     [Fact]
@@ -605,7 +605,7 @@ public sealed record UserDto(int Id, string Name);
         Assert.NotNull(result.GeneratedSource);
         Assert.Contains(result.GeneratorDiagnostics, d => d.Id == "AM006" && d.Severity == DiagnosticSeverity.Warning);
         Assert.DoesNotContain("ToUserDto", result.GeneratedSource);
-        AssertNoCompileErrors(result);
+        GeneratorTestHelper.AssertNoUnexpectedErrors(result);
     }
 
     [Fact]
@@ -632,7 +632,7 @@ public sealed record UserDto(int Id, string Name);
         Assert.NotNull(result.GeneratedSource);
         Assert.Contains(result.GeneratorDiagnostics, d => d.Id == "AM006" && d.Severity == DiagnosticSeverity.Warning);
         Assert.DoesNotContain("ToUserDto", result.GeneratedSource);
-        AssertNoCompileErrors(result);
+        GeneratorTestHelper.AssertNoUnexpectedErrors(result);
     }
 
     [Fact]
@@ -660,7 +660,7 @@ public sealed record UserDto(int Id, string Name)
         Assert.NotNull(result.GeneratedSource);
         Assert.Contains("var destination = new global::Sample.UserDto(source.Id, source.Name);", result.GeneratedSource);
         Assert.Contains("destination.Nickname = source.Nickname;", result.GeneratedSource);
-        AssertNoCompileErrors(result);
+        GeneratorTestHelper.AssertNoUnexpectedErrors(result);
     }
 
     [Fact]
@@ -689,7 +689,7 @@ public sealed record UserDto(int Id, string Name)
         Assert.Contains(
             "var destination = new global::Sample.UserDto(source.Id, source.Name) { Nickname = source.Nickname };",
             result.GeneratedSource);
-        AssertNoCompileErrors(result);
+        GeneratorTestHelper.AssertNoUnexpectedErrors(result);
     }
 
     [Fact]
@@ -719,7 +719,7 @@ public sealed record PostDto
         Assert.NotNull(result.GeneratedSource);
         Assert.Contains(result.GeneratorDiagnostics, d => d.Id == "AM007" && d.Severity == DiagnosticSeverity.Warning);
         Assert.Contains("var destination = new global::Sample.PostDto {  };", result.GeneratedSource);
-        AssertNoCompileErrors(result);
+        GeneratorTestHelper.AssertNoUnexpectedErrors(result);
     }
 
     [Fact]
@@ -745,7 +745,7 @@ public sealed record UserDto
         Assert.NotNull(result.GeneratedSource);
         Assert.Contains("Expression<Func<global::Sample.User, global::Sample.UserDto>> UserToUserDtoProjection", result.GeneratedSource);
         Assert.Contains("source => new global::Sample.UserDto { Id = source.Id };", result.GeneratedSource);
-        AssertNoCompileErrors(result);
+        GeneratorTestHelper.AssertNoUnexpectedErrors(result);
     }
 
     [Fact]
@@ -771,7 +771,7 @@ public sealed record UserDto
         Assert.NotNull(result.GeneratedSource);
         Assert.Contains("[(typeof(global::Sample.User), typeof(global::Sample.UserDto))] = s => ((global::Sample.User)s).ToUserDto(),", result.GeneratedSource);
         Assert.DoesNotContain("[(typeof(global::Sample.User), typeof(global::Sample.UserDto))] = (s, d) =>", result.GeneratedSource);
-        AssertNoCompileErrors(result);
+        GeneratorTestHelper.AssertNoUnexpectedErrors(result);
     }
 
     [Fact]
@@ -808,7 +808,7 @@ public sealed class BasketDto
 
         Assert.NotNull(result.GeneratedSource);
         Assert.Contains("destination.Items = source.Items.Select(x => x.ToItemDto()).ToHashSet();", result.GeneratedSource);
-        AssertNoCompileErrors(result);
+        GeneratorTestHelper.AssertNoUnexpectedErrors(result);
     }
 
     [Fact]
@@ -834,7 +834,7 @@ public sealed class BasketDto
 
         Assert.NotNull(result.GeneratedSource);
         Assert.Contains("destination.Tags = source.Tags.ToArray();", result.GeneratedSource);
-        AssertNoCompileErrors(result);
+        GeneratorTestHelper.AssertNoUnexpectedErrors(result);
     }
 
     [Fact]
@@ -871,7 +871,7 @@ public sealed class BasketDto
 
         Assert.NotNull(result.GeneratedSource);
         Assert.Contains("Items = source.Items.Select(x => new global::Sample.ItemDto { Id = x.Id }).ToHashSet()", result.GeneratedSource);
-        AssertNoCompileErrors(result);
+        GeneratorTestHelper.AssertNoUnexpectedErrors(result);
     }
 
     [Fact]
@@ -903,7 +903,7 @@ public sealed class CategoryDto
         Assert.Contains("if (depth < 3)", result.GeneratedSource);
         Assert.Contains("destination.Parent = source.Parent?.ToCategoryDto(new global::Sample.CategoryDto(), depth + 1)!;", result.GeneratedSource);
         Assert.DoesNotContain(result.GeneratorDiagnostics, d => d.Id == "AM020");
-        AssertNoCompileErrors(result);
+        GeneratorTestHelper.AssertNoUnexpectedErrors(result);
     }
 
     [Fact]
@@ -933,7 +933,7 @@ public sealed class CategoryDto
         Assert.Contains("if (depth < 2)", result.GeneratedSource);
         Assert.Contains("destination.Children = source.Children.Select(x => x.ToCategoryDto(new global::Sample.CategoryDto(), depth + 1)).ToList();", result.GeneratedSource);
         Assert.DoesNotContain(result.GeneratorDiagnostics, d => d.Id == "AM020");
-        AssertNoCompileErrors(result);
+        GeneratorTestHelper.AssertNoUnexpectedErrors(result);
     }
 
     [Fact]
@@ -962,7 +962,7 @@ public sealed class CategoryDto
         Assert.Contains("destination.Parent = source.Parent?.ToCategoryDto()!;", result.GeneratedSource);
         Assert.DoesNotContain("int depth", result.GeneratedSource);
         Assert.DoesNotContain(result.GeneratorDiagnostics, d => d.Id == "AM020");
-        AssertNoCompileErrors(result);
+        GeneratorTestHelper.AssertNoUnexpectedErrors(result);
     }
 
     [Fact]
@@ -991,7 +991,7 @@ public sealed class UserDto
 
         Assert.NotNull(result.GeneratedSource);
         Assert.Contains("destination.FullName = global::Sample.User.ComputeFullName(source);", result.GeneratedSource);
-        AssertNoCompileErrors(result);
+        GeneratorTestHelper.AssertNoUnexpectedErrors(result);
     }
 
     [Fact]
@@ -1020,7 +1020,7 @@ public sealed class UserDto
 
         Assert.NotNull(result.GeneratedSource);
         Assert.Contains("source => new global::Sample.UserDto { FullName = global::Sample.User.ComputeFullName(source) };", result.GeneratedSource);
-        AssertNoCompileErrors(result);
+        GeneratorTestHelper.AssertNoUnexpectedErrors(result);
     }
 
     [Fact]
@@ -1048,7 +1048,7 @@ public sealed class UserDto
 
         Assert.NotNull(result.GeneratedSource);
         Assert.Contains("destination.Code = global::Sample.User.ComputeCode(source);", result.GeneratedSource);
-        AssertNoCompileErrors(result);
+        GeneratorTestHelper.AssertNoUnexpectedErrors(result);
     }
 
     [Fact]
@@ -1075,7 +1075,7 @@ public sealed class UserDto
         Assert.NotNull(result.GeneratedSource);
         Assert.Contains(result.GeneratorDiagnostics, d => d.Id == "AM009" && d.Severity == DiagnosticSeverity.Error);
         Assert.DoesNotContain("destination.FullName", result.GeneratedSource);
-        AssertNoCompileErrors(result);
+        GeneratorTestHelper.AssertNoUnexpectedErrors(result, "AM009");
     }
 
     [Fact]
@@ -1101,7 +1101,7 @@ public sealed class UserDto
 
         Assert.NotNull(result.GeneratedSource);
         Assert.Contains(result.GeneratorDiagnostics, d => d.Id == "AM009" && d.Severity == DiagnosticSeverity.Error);
-        AssertNoCompileErrors(result);
+        GeneratorTestHelper.AssertNoUnexpectedErrors(result, "AM009");
     }
 
     [Fact]
@@ -1134,7 +1134,7 @@ public sealed class UserDto
         // matching User property by name, so User.FirstName is left unmapped there (AM001) —
         // proving the converter wasn't silently carried over to the reverse mapping.
         Assert.Contains(result.GeneratorDiagnostics, d => d.Id == "AM001" && d.GetMessage().Contains("FirstName"));
-        AssertNoCompileErrors(result);
+        GeneratorTestHelper.AssertNoUnexpectedErrors(result);
     }
 
     [Fact]
@@ -1166,7 +1166,7 @@ public sealed class UserDto
         Assert.NotNull(result.GeneratedSource);
         Assert.Contains("if (global::Sample.User.ShouldMap(source))", result.GeneratedSource);
         Assert.Contains("destination.FullName = global::Sample.User.ComputeFullName(source);", result.GeneratedSource);
-        AssertNoCompileErrors(result);
+        GeneratorTestHelper.AssertNoUnexpectedErrors(result);
     }
 
     [Fact]
@@ -1203,7 +1203,7 @@ public sealed class BasketDto
 
         Assert.NotNull(result.GeneratedSource);
         Assert.Contains("destination.Items = source.Items.Select(x => x.ToItemDto()).ToList();", result.GeneratedSource);
-        AssertNoCompileErrors(result);
+        GeneratorTestHelper.AssertNoUnexpectedErrors(result);
     }
 
     [Fact]
@@ -1231,7 +1231,7 @@ public sealed record UserDto
         Assert.DoesNotContain("ToUserDto(this global::Sample.User source, global::Sample.UserDto destination)", result.GeneratedSource);
         // Reverse (UserDto -> plain class User) keeps it, since User.Id has a regular setter.
         Assert.Contains("public static global::Sample.User ToUser(this global::Sample.UserDto source, global::Sample.User destination)", result.GeneratedSource);
-        AssertNoCompileErrors(result);
+        GeneratorTestHelper.AssertNoUnexpectedErrors(result);
     }
 
     [Fact]
@@ -1257,7 +1257,7 @@ public sealed record UserDto
 
         Assert.NotNull(result.GeneratedSource);
         Assert.Contains("var destination = new global::Sample.UserDto { EmailAddress = source.Email };", result.GeneratedSource);
-        AssertNoCompileErrors(result);
+        GeneratorTestHelper.AssertNoUnexpectedErrors(result);
     }
 
     [Fact]
@@ -1286,7 +1286,7 @@ public sealed class BasketDto
         // Regression: this used to spuriously fire AM018 (Error) and fail a real build - see
         // MappingEmitter.cs's ReportOrphanedNestedMappings.
         Assert.DoesNotContain(result.GeneratorDiagnostics, d => d.Id == "AM018");
-        AssertNoCompileErrors(result);
+        GeneratorTestHelper.AssertNoUnexpectedErrors(result);
     }
 
     [Fact]
@@ -1313,7 +1313,7 @@ public sealed class BasketDto
         Assert.NotNull(result.GeneratedSource);
         Assert.Contains("destination.Tags = source.Tags.ToArray();", result.GeneratedSource);
         Assert.DoesNotContain(result.GeneratorDiagnostics, d => d.Id == "AM018");
-        AssertNoCompileErrors(result);
+        GeneratorTestHelper.AssertNoUnexpectedErrors(result);
     }
 
     [Fact]
@@ -1360,7 +1360,7 @@ public sealed class BDto
         Assert.DoesNotContain("int depth", result.GeneratedSource);
         Assert.Contains(result.GeneratorDiagnostics, d => d.Id == "AM020" && d.GetMessage().Contains("A") && d.GetMessage().Contains("ADto"));
         Assert.Contains(result.GeneratorDiagnostics, d => d.Id == "AM020" && d.GetMessage().Contains("B") && d.GetMessage().Contains("BDto"));
-        AssertNoCompileErrors(result);
+        GeneratorTestHelper.AssertNoUnexpectedErrors(result);
     }
 
     [Fact]
@@ -1389,7 +1389,7 @@ public sealed record CategoryDto(string Name, CategoryDto? Parent);
         Assert.Contains(result.GeneratorDiagnostics, d =>
             d.Id == "AM020" && d.Severity == DiagnosticSeverity.Warning &&
             d.GetMessage().Contains("Category") && d.GetMessage().Contains("CategoryDto"));
-        AssertNoCompileErrors(result);
+        GeneratorTestHelper.AssertNoUnexpectedErrors(result);
     }
 
     [Fact]
@@ -1422,7 +1422,7 @@ public sealed class UserDto
         Assert.NotNull(result.GeneratedSource);
         Assert.Contains("destination.FullName = global::Sample.User.ComputeFullName(source);", result.GeneratedSource);
         Assert.Contains("destination.InitialsUpper = global::Sample.User.ComputeInitials(source);", result.GeneratedSource);
-        AssertNoCompileErrors(result);
+        GeneratorTestHelper.AssertNoUnexpectedErrors(result);
     }
 
     [Fact]
@@ -1452,7 +1452,7 @@ public sealed class UserDto
         Assert.NotNull(result.GeneratedSource);
         Assert.Contains(result.GeneratorDiagnostics, d => d.Id == "AM009" && d.Severity == DiagnosticSeverity.Error);
         Assert.DoesNotContain("destination.FullName", result.GeneratedSource);
-        AssertNoCompileErrors(result);
+        GeneratorTestHelper.AssertNoUnexpectedErrors(result, "AM009");
     }
 
     [Fact]
@@ -1479,7 +1479,7 @@ public sealed class UserDto
         Assert.NotNull(result.GeneratedSource);
         Assert.Contains("destination.Name = source.Name ?? \"Unknown\";", result.GeneratedSource);
         Assert.Contains("Name = source.Name ?? \"Unknown\"", result.GeneratedSource);
-        AssertNoCompileErrors(result);
+        GeneratorTestHelper.AssertNoUnexpectedErrors(result);
     }
 
     [Fact]
@@ -1509,7 +1509,7 @@ public sealed class UserDto
         Assert.NotNull(result.GeneratedSource);
         Assert.Contains("destination.FullName = global::Sample.User.ComputeFullName(source) ?? \"N/A\";", result.GeneratedSource);
         Assert.Contains("FullName = global::Sample.User.ComputeFullName(source) ?? \"N/A\"", result.GeneratedSource);
-        AssertNoCompileErrors(result);
+        GeneratorTestHelper.AssertNoUnexpectedErrors(result);
     }
 
     [Fact]
@@ -1535,7 +1535,7 @@ public sealed class UserDto
 
         Assert.NotNull(result.GeneratedSource);
         Assert.Contains("destination.Age = source.Age ?? 18;", result.GeneratedSource);
-        AssertNoCompileErrors(result);
+        GeneratorTestHelper.AssertNoUnexpectedErrors(result);
     }
 
     [Fact]
@@ -1566,7 +1566,7 @@ public sealed class UserDto
         Assert.NotNull(result.GeneratedSource);
         Assert.Contains("if (global::Sample.User.ShouldMapName(source))", result.GeneratedSource);
         Assert.Contains("destination.Name = source.Name ?? \"Unknown\";", result.GeneratedSource);
-        AssertNoCompileErrors(result);
+        GeneratorTestHelper.AssertNoUnexpectedErrors(result);
     }
 
     [Fact]
@@ -1594,7 +1594,7 @@ public sealed class UserDto
         Assert.Contains("destination.Name = source.Name;", result.GeneratedSource);
         Assert.DoesNotContain("??", result.GeneratedSource);
         Assert.Contains(result.GeneratorDiagnostics, d => d.Id == "AM019" && d.Severity == DiagnosticSeverity.Warning && d.GetMessage().Contains("Name"));
-        AssertNoCompileErrors(result);
+        GeneratorTestHelper.AssertNoUnexpectedErrors(result);
     }
 
     [Fact]
@@ -1621,7 +1621,7 @@ public sealed class UserDto
         Assert.NotNull(result.GeneratedSource);
         Assert.Contains("destination.Id = source.Id;", result.GeneratedSource);
         Assert.Contains(result.GeneratorDiagnostics, d => d.Id == "AM019" && d.Severity == DiagnosticSeverity.Warning && d.GetMessage().Contains("Id"));
-        AssertNoCompileErrors(result);
+        GeneratorTestHelper.AssertNoUnexpectedErrors(result);
     }
 
     [Fact]
@@ -1655,7 +1655,7 @@ public sealed class UserDto
         var message = am017.GetMessage();
         Assert.Contains("Name", message);
         Assert.Contains("[MapDefault]", message);
-        AssertNoCompileErrors(result);
+        GeneratorTestHelper.AssertNoUnexpectedErrors(result);
     }
 
     [Fact]
@@ -1693,7 +1693,7 @@ public sealed class UserDto
         var message = am017.GetMessage();
         Assert.Contains("Name", message);
         Assert.Contains("[MapCondition]", message);
-        AssertNoCompileErrors(result);
+        GeneratorTestHelper.AssertNoUnexpectedErrors(result);
     }
 
     [Fact]
@@ -1727,7 +1727,7 @@ public sealed class UserDto
         var message = am017.GetMessage();
         Assert.Contains("EmailAddress", message);
         Assert.Contains("[MapProperty]", message);
-        AssertNoCompileErrors(result);
+        GeneratorTestHelper.AssertNoUnexpectedErrors(result);
     }
 
     [Fact]
@@ -1764,7 +1764,7 @@ public sealed class UserDto
         var message = am017.GetMessage();
         Assert.Contains("FullName", message);
         Assert.Contains("[MapUsing]", message);
-        AssertNoCompileErrors(result);
+        GeneratorTestHelper.AssertNoUnexpectedErrors(result);
     }
 
     [Fact]
@@ -1798,7 +1798,7 @@ public sealed class UserDto
 
         Assert.NotNull(result.GeneratedSource);
         Assert.DoesNotContain(result.GeneratorDiagnostics, d => d.Id == "AM017");
-        AssertNoCompileErrors(result);
+        GeneratorTestHelper.AssertNoUnexpectedErrors(result);
     }
 
     [Fact]
@@ -1836,7 +1836,7 @@ public sealed class UserDto
         Assert.NotNull(result.GeneratedSource);
         Assert.Contains("destination.Address = source.Address.ToAddressDto();", result.GeneratedSource);
         Assert.Contains(result.GeneratorDiagnostics, d => d.Id == "AM019" && d.Severity == DiagnosticSeverity.Warning && d.GetMessage().Contains("Address"));
-        AssertNoCompileErrors(result);
+        GeneratorTestHelper.AssertNoUnexpectedErrors(result);
     }
 
     [Fact]
@@ -1864,7 +1864,7 @@ public sealed class UserDto
 
         Assert.NotNull(result.GeneratedSource);
         Assert.Contains("destination.Status = source.Status ?? global::Sample.UserStatus.Active;", result.GeneratedSource);
-        AssertNoCompileErrors(result);
+        GeneratorTestHelper.AssertNoUnexpectedErrors(result);
     }
 
     [Fact]
@@ -1891,7 +1891,7 @@ public sealed class UserDto
         Assert.NotNull(result.GeneratedSource);
         Assert.Contains("destination.Name = source.Name ?? \"Unknown\";", result.GeneratedSource);
         Assert.Contains("destination.Name = source.Name;", result.GeneratedSource);
-        AssertNoCompileErrors(result);
+        GeneratorTestHelper.AssertNoUnexpectedErrors(result);
     }
 
     [Fact]
@@ -1920,7 +1920,7 @@ public sealed class UserDto
         Assert.Contains("public static global::Sample.UserDto ToUserDto(this global::Sample.User source)", result.GeneratedSource);
         Assert.Contains("destination.Id = source.Id;", result.GeneratedSource);
         Assert.Contains("destination.Name = source.Name;", result.GeneratedSource);
-        AssertNoCompileErrors(result);
+        GeneratorTestHelper.AssertNoUnexpectedErrors(result);
     }
 
     [Fact]
@@ -1946,7 +1946,7 @@ public sealed class UserDto
 
         Assert.NotNull(result.GeneratedSource);
         Assert.Contains("destination.EmailAddress = source.Email;", result.GeneratedSource);
-        AssertNoCompileErrors(result);
+        GeneratorTestHelper.AssertNoUnexpectedErrors(result);
     }
 
     [Fact]
@@ -1972,7 +1972,7 @@ public sealed class UserDto
         Assert.NotNull(result.GeneratedSource);
         Assert.Contains("ToUserDto(this global::Sample.User source)", result.GeneratedSource);
         Assert.Contains("ToUser(this global::Sample.UserDto source)", result.GeneratedSource);
-        AssertNoCompileErrors(result);
+        GeneratorTestHelper.AssertNoUnexpectedErrors(result);
     }
 
     [Fact]
@@ -2002,7 +2002,7 @@ public sealed class UserDto
 
         Assert.NotNull(result.GeneratedSource);
         Assert.Contains("ShouldMapName(source)", result.GeneratedSource);
-        AssertNoCompileErrors(result);
+        GeneratorTestHelper.AssertNoUnexpectedErrors(result);
     }
 
     [Fact]
@@ -2031,7 +2031,7 @@ public sealed class UserDto
 
         Assert.NotNull(result.GeneratedSource);
         Assert.Contains("destination.FullName = global::Sample.UserDto.ComputeFullName(source);", result.GeneratedSource);
-        AssertNoCompileErrors(result);
+        GeneratorTestHelper.AssertNoUnexpectedErrors(result);
     }
 
     [Fact]
@@ -2058,7 +2058,7 @@ public sealed class UserDto
         Assert.NotNull(result.GeneratedSource);
         Assert.Contains(result.GeneratorDiagnostics, d => d.Id == "AM009" && d.Severity == DiagnosticSeverity.Error);
         Assert.DoesNotContain("destination.FullName", result.GeneratedSource);
-        AssertNoCompileErrors(result);
+        GeneratorTestHelper.AssertNoUnexpectedErrors(result, "AM009");
     }
 
     [Fact]
@@ -2094,7 +2094,7 @@ public sealed class UserDto
 
         Assert.NotNull(result.GeneratedSource);
         Assert.Contains("destination.HomeAddress = source.HomeAddress?.ToAddressDto()!;", result.GeneratedSource);
-        AssertNoCompileErrors(result);
+        GeneratorTestHelper.AssertNoUnexpectedErrors(result);
     }
 
     [Fact]
@@ -2127,7 +2127,7 @@ public sealed class UserDto
         Assert.NotNull(result.GeneratedSource);
         Assert.Contains("source => new global::Sample.UserDto { FullName = global::Sample.UserDto.ComputeFullName(source) };", result.GeneratedSource);
         Assert.Contains("ProjectToUserDto(this IQueryable<global::Sample.User> source)", result.GeneratedSource);
-        AssertNoCompileErrors(result);
+        GeneratorTestHelper.AssertNoUnexpectedErrors(result);
     }
 
     [Fact]
@@ -2155,7 +2155,7 @@ public sealed class PostDto
 
         Assert.NotNull(result.GeneratedSource);
         Assert.Contains("if (global::Sample.PostDto.ShouldMapBody(source, destination))", result.GeneratedSource);
-        AssertNoCompileErrors(result);
+        GeneratorTestHelper.AssertNoUnexpectedErrors(result);
     }
 
     [Fact]
@@ -2182,7 +2182,7 @@ public sealed class PostDto
         Assert.NotNull(result.GeneratedSource);
         Assert.Contains(result.GeneratorDiagnostics, d => d.Id == "AM004" && d.Severity == DiagnosticSeverity.Error);
         Assert.DoesNotContain("destination.Body", result.GeneratedSource);
-        AssertNoCompileErrors(result);
+        GeneratorTestHelper.AssertNoUnexpectedErrors(result, "AM004");
     }
 
     [Fact]
@@ -2209,7 +2209,7 @@ public sealed class UserDto
         Assert.NotNull(result.GeneratedSource);
         Assert.Contains("destination.Name = source.Name ?? \"Unknown\";", result.GeneratedSource);
         Assert.Contains("Name = source.Name ?? \"Unknown\"", result.GeneratedSource);
-        AssertNoCompileErrors(result);
+        GeneratorTestHelper.AssertNoUnexpectedErrors(result);
     }
 
     [Fact]
@@ -2244,7 +2244,7 @@ public sealed class UserDto
         Assert.Contains("ToUser(this global::Sample.UserDto source)", result.GeneratedSource);
         Assert.Contains("destination.FullName = global::Sample.UserDto.ComputeFullName(source);", result.GeneratedSource);
         Assert.Contains(result.GeneratorDiagnostics, d => d.Id == "AM001");
-        AssertNoCompileErrors(result);
+        GeneratorTestHelper.AssertNoUnexpectedErrors(result);
     }
 
     [Fact]
@@ -2272,7 +2272,7 @@ public sealed class UserDto
         Assert.Contains(result.GeneratorDiagnostics, d => d.Id == "AM011" && d.Severity == DiagnosticSeverity.Warning);
         // Both declarations agree, so the mapping itself still comes out fine either way.
         Assert.Contains("public static global::Sample.UserDto ToUserDto(this global::Sample.User source)", result.GeneratedSource);
-        AssertNoCompileErrors(result);
+        GeneratorTestHelper.AssertNoUnexpectedErrors(result);
     }
 
     [Fact]
@@ -2299,7 +2299,7 @@ public sealed class UserDto
         Assert.NotNull(result.GeneratedSource);
         Assert.Contains(result.GeneratorDiagnostics, d => d.Id == "AM011" && d.Severity == DiagnosticSeverity.Warning);
         Assert.Contains("public static global::Sample.UserDto ToUserDto(this global::Sample.User source)", result.GeneratedSource);
-        AssertNoCompileErrors(result);
+        GeneratorTestHelper.AssertNoUnexpectedErrors(result);
     }
 
     [Fact]
@@ -2327,7 +2327,7 @@ public sealed class UserDto
 
         Assert.NotNull(result.GeneratedSource);
         Assert.Contains(result.GeneratorDiagnostics, d => d.Id == "AM011" && d.Severity == DiagnosticSeverity.Warning);
-        AssertNoCompileErrors(result);
+        GeneratorTestHelper.AssertNoUnexpectedErrors(result);
     }
 
     [Fact]
@@ -2365,7 +2365,7 @@ public sealed class UserDto
 
         Assert.NotNull(result.GeneratedSource);
         Assert.DoesNotContain(result.GeneratorDiagnostics, d => d.Id == "AM011");
-        AssertNoCompileErrors(result);
+        GeneratorTestHelper.AssertNoUnexpectedErrors(result);
     }
 
     [Fact]
@@ -2405,7 +2405,7 @@ public sealed class UserDto
         Assert.Contains("destination.EmailAddress = source.Email;", result.GeneratedSource);
         Assert.Contains("public static global::Sample.User ToUser(this global::Sample.UserDto source)", result.GeneratedSource);
         Assert.Contains("destination.Email = source.EmailAddress;", result.GeneratedSource);
-        AssertNoCompileErrors(result);
+        GeneratorTestHelper.AssertNoUnexpectedErrors(result);
     }
 
     [Fact]
@@ -2437,7 +2437,7 @@ public sealed class UserDto
         Assert.NotNull(result.GeneratedSource);
         Assert.Contains("destination.EmailAddress = source.Email;", result.GeneratedSource);
         Assert.Contains(result.GeneratorDiagnostics, d => d.Id == "AM001" && d.GetMessage().Contains("Email"));
-        AssertNoCompileErrors(result);
+        GeneratorTestHelper.AssertNoUnexpectedErrors(result);
     }
 
     [Fact]
@@ -2473,7 +2473,7 @@ public sealed class UserDto
         Assert.Contains("destination.EmailAddress = source.Email;", result.GeneratedSource);
         Assert.Contains(result.GeneratorDiagnostics, d => d.Id == "AM001" && d.GetMessage().Contains("Email") && d.GetMessage().Contains("User"));
         Assert.DoesNotContain("destination.Email = ", result.GeneratedSource);
-        AssertNoCompileErrors(result);
+        GeneratorTestHelper.AssertNoUnexpectedErrors(result);
     }
 
     [Fact]
@@ -2504,7 +2504,7 @@ public sealed class UserDto
         Assert.DoesNotContain(result.GeneratorDiagnostics, d => d.Id == "AM011");
         Assert.Contains("public static global::Sample.UserDto ToUserDto(this global::Sample.User source)", result.GeneratedSource);
         Assert.Contains("public static global::Sample.User ToUser(this global::Sample.UserDto source)", result.GeneratedSource);
-        AssertNoCompileErrors(result);
+        GeneratorTestHelper.AssertNoUnexpectedErrors(result);
     }
 
     [Fact]
@@ -2547,7 +2547,7 @@ public sealed class UserDto
         // above. The failed condition means ToUser's Body property was skipped entirely
         // (not emitted unconditioned, and not emitted with the wrong-direction guard either).
         Assert.Single(Regex.Matches(result.GeneratedSource!, "destination\\.Body"));
-        AssertNoCompileErrors(result);
+        GeneratorTestHelper.AssertNoUnexpectedErrors(result, "AM004");
     }
 
     [Fact]
@@ -2584,7 +2584,7 @@ public sealed class UserDto
         Assert.Contains("destination.FullName = global::Sample.UserDto.ComputeFullName(source);", result.GeneratedSource);
         Assert.Contains(result.GeneratorDiagnostics, d => d.Id == "AM009" && d.Severity == DiagnosticSeverity.Error);
         Assert.DoesNotContain("destination.FirstName", result.GeneratedSource);
-        AssertNoCompileErrors(result);
+        GeneratorTestHelper.AssertNoUnexpectedErrors(result, "AM009");
     }
 
     [Fact]
@@ -2636,7 +2636,7 @@ public sealed class UserDto
         Assert.Contains("Extra = source.Extra }", v2Section);
 
         Assert.DoesNotContain(result.GeneratorDiagnostics, d => d.Id == "AM001" && d.GetMessage().Contains("Extra"));
-        AssertNoCompileErrors(result);
+        GeneratorTestHelper.AssertNoUnexpectedErrors(result);
     }
 
     [Fact]
@@ -2676,7 +2676,7 @@ public sealed class UserDto
         Assert.NotNull(result.GeneratedSource);
         Assert.DoesNotContain("Extra", result.GeneratedSource);
         Assert.DoesNotContain(result.GeneratorDiagnostics, d => d.Id == "AM001" && d.GetMessage().Contains("Extra"));
-        AssertNoCompileErrors(result);
+        GeneratorTestHelper.AssertNoUnexpectedErrors(result);
     }
 
     [Fact]
@@ -2712,7 +2712,7 @@ public sealed class UserDto
 
         Assert.NotNull(result.GeneratedSource);
         Assert.Contains("destination.Extra = source.Extra;", result.GeneratedSource);
-        AssertNoCompileErrors(result);
+        GeneratorTestHelper.AssertNoUnexpectedErrors(result);
     }
 
     [Fact]
@@ -2745,7 +2745,7 @@ public sealed class UserDto
         Assert.NotNull(result.GeneratedSource);
         Assert.DoesNotContain("Body", result.GeneratedSource);
         Assert.Contains(result.GeneratorDiagnostics, d => d.Id == "AM012" && d.Severity == DiagnosticSeverity.Warning && d.GetMessage().Contains("Body"));
-        AssertNoCompileErrors(result);
+        GeneratorTestHelper.AssertNoUnexpectedErrors(result);
     }
 
     [Fact]
@@ -2795,7 +2795,7 @@ public sealed class UserDto
 
         Assert.Contains("if (global::Sample.UserDto.ShouldMap(source))", v1Section);
         Assert.DoesNotContain("Body", v2Section);
-        AssertNoCompileErrors(result);
+        GeneratorTestHelper.AssertNoUnexpectedErrors(result);
     }
 
     [Fact]
@@ -2830,7 +2830,7 @@ public sealed class UserDto
         // property is a regular mutable setter, so reassigning it there is legal and harmless.
         Assert.Contains("destination.Name = source.Name;", result.GeneratedSource);
         Assert.DoesNotContain(result.GeneratorDiagnostics, d => d.Id == "AM013");
-        AssertNoCompileErrors(result);
+        GeneratorTestHelper.AssertNoUnexpectedErrors(result);
     }
 
     [Fact]
@@ -2936,7 +2936,7 @@ public sealed class UserDto
         Assert.Contains("[MapUsing]", message);
         Assert.Contains("[MapDefault]", message);
         Assert.Contains("[MapProperty]", message);
-        AssertNoCompileErrors(result);
+        GeneratorTestHelper.AssertNoUnexpectedErrors(result);
     }
 
     [Fact]
@@ -2979,7 +2979,7 @@ public sealed class UserDto
         var message = am015.GetMessage();
         Assert.Contains("TypoUser", message);
         Assert.Contains("Extra", message);
-        AssertNoCompileErrors(result);
+        GeneratorTestHelper.AssertNoUnexpectedErrors(result);
     }
 
     [Fact]
@@ -3008,7 +3008,7 @@ public sealed class UserDto
 
         Assert.NotNull(result.GeneratedSource);
         Assert.DoesNotContain(result.GeneratorDiagnostics, d => d.Id == "AM015");
-        AssertNoCompileErrors(result);
+        GeneratorTestHelper.AssertNoUnexpectedErrors(result);
     }
 
     [Fact]
@@ -3045,7 +3045,7 @@ public sealed class UserDto
         Assert.Contains("ComputedOnly", message);
         Assert.Contains("unscoped", message);
         Assert.Contains("Sample.User", message);
-        AssertNoCompileErrors(result);
+        GeneratorTestHelper.AssertNoUnexpectedErrors(result);
     }
 
     [Fact]
@@ -3080,7 +3080,7 @@ public sealed class UserDto
         var message = am016.GetMessage();
         Assert.Contains("Extra", message);
         Assert.Contains("more than one", message);
-        AssertNoCompileErrors(result);
+        GeneratorTestHelper.AssertNoUnexpectedErrors(result);
     }
 
     [Fact]
@@ -3127,7 +3127,7 @@ public sealed class UserDto
         Assert.NotNull(result.GeneratedSource);
         Assert.DoesNotContain(result.GeneratorDiagnostics, d => d.Id == "AM016");
         Assert.DoesNotContain(result.GeneratorDiagnostics, d => d.Id == "AM015");
-        AssertNoCompileErrors(result);
+        GeneratorTestHelper.AssertNoUnexpectedErrors(result);
     }
 
     [Fact]
@@ -3166,7 +3166,7 @@ public sealed class UserDto
         Assert.Contains(
             "UserToUserDtoProjection = source => new global::Sample.UserDto { Id = source.Id };",
             source);
-        AssertNoCompileErrors(result);
+        GeneratorTestHelper.AssertNoUnexpectedErrors(result);
     }
 
     [Fact]
@@ -3208,15 +3208,6 @@ public sealed class PostDto
         Assert.Single(Regex.Matches(source, "static GeneratedMappings\\(\\)"));
         Assert.Contains("UserToUserDtoProjection = source => new global::Sample.UserDto { Id = source.Id };", source);
         Assert.Contains("PostToPostDtoProjection = source => new global::Sample.PostDto { Id = source.Id };", source);
-        AssertNoCompileErrors(result);
-    }
-
-    private static void AssertNoCompileErrors(GeneratorTestResult result)
-    {
-        var errors = result.CompilationDiagnostics
-            .Where(d => d.Severity == DiagnosticSeverity.Error)
-            .ToList();
-
-        Assert.True(errors.Count == 0, string.Join("\n", errors.Select(e => e.ToString())));
+        GeneratorTestHelper.AssertNoUnexpectedErrors(result);
     }
 }

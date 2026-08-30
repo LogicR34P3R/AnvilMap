@@ -1,5 +1,3 @@
-using Microsoft.CodeAnalysis;
-
 namespace AnvilMap.Generator.Tests;
 
 public class EnumConversionTests
@@ -37,7 +35,7 @@ public sealed class StatusDto
         Assert.NotNull(result.GeneratedSource);
         Assert.Contains("destination.Code = (int)source.Code;", result.GeneratedSource);
         Assert.Contains("Code = (int)source.Code", result.GeneratedSource);
-        AssertNoCompileErrors(result);
+        GeneratorTestHelper.AssertNoUnexpectedErrors(result);
     }
 
     [Fact]
@@ -47,7 +45,7 @@ public sealed class StatusDto
 
         Assert.NotNull(result.GeneratedSource);
         Assert.Contains("destination.State = source.State.ToString();", result.GeneratedSource);
-        AssertNoCompileErrors(result);
+        GeneratorTestHelper.AssertNoUnexpectedErrors(result);
     }
 
     [Fact]
@@ -58,7 +56,7 @@ public sealed class StatusDto
         Assert.NotNull(result.GeneratedSource);
         Assert.Contains("StatusEntityToStatusDtoProjection = source => new global::Sample.StatusDto { Code = (int)source.Code };", result.GeneratedSource);
         Assert.Contains(result.GeneratorDiagnostics, d => d.Id == "AM022" && d.GetMessage().Contains("State"));
-        AssertNoCompileErrors(result);
+        GeneratorTestHelper.AssertNoUnexpectedErrors(result);
     }
 
     [Fact]
@@ -68,7 +66,7 @@ public sealed class StatusDto
 
         Assert.NotNull(result.GeneratedSource);
         Assert.Contains("Code = (int)source.Code", result.GeneratedSource);
-        AssertNoCompileErrors(result);
+        GeneratorTestHelper.AssertNoUnexpectedErrors(result);
     }
 
     [Fact]
@@ -117,6 +115,7 @@ public sealed class Dto
 
         Assert.Contains(result.GeneratorDiagnostics, d => d.Id == "AM003" && d.GetMessage().Contains("State"));
         Assert.DoesNotContain("(long)source.State", result.GeneratedSource);
+        GeneratorTestHelper.AssertNoUnexpectedErrors(result, "AM003");
     }
 
     [Fact]
@@ -143,7 +142,7 @@ public sealed class Dto
 
         Assert.NotNull(result.GeneratedSource);
         Assert.Contains("destination.State = (byte)source.State;", result.GeneratedSource);
-        AssertNoCompileErrors(result);
+        GeneratorTestHelper.AssertNoUnexpectedErrors(result);
     }
 
     [Fact]
@@ -174,7 +173,7 @@ public sealed class Dto
         Assert.NotNull(result.GeneratedSource);
         Assert.Contains("if (global::Sample.Entity.ShouldMap(source))", result.GeneratedSource);
         Assert.Contains("destination.State = source.State.ToString();", result.GeneratedSource);
-        AssertNoCompileErrors(result);
+        GeneratorTestHelper.AssertNoUnexpectedErrors(result);
     }
 
     [Fact]
@@ -207,7 +206,7 @@ public sealed class Dto
         Assert.DoesNotContain("source.State.ToString()", result.GeneratedSource);
         Assert.Contains("destination.State = global::Sample.Entity.ToLabel(source);", result.GeneratedSource);
         Assert.Contains("EntityToDtoProjection = source => new global::Sample.Dto { State = global::Sample.Entity.ToLabel(source) };", result.GeneratedSource);
-        AssertNoCompileErrors(result);
+        GeneratorTestHelper.AssertNoUnexpectedErrors(result);
     }
 
     [Fact]
@@ -234,14 +233,6 @@ public sealed class Dto
 
         Assert.Contains(result.GeneratorDiagnostics, d => d.Id == "AM003" && d.GetMessage().Contains("State"));
         Assert.DoesNotContain(".ToString()", result.GeneratedSource);
-    }
-
-    private static void AssertNoCompileErrors(GeneratorTestResult result)
-    {
-        var errors = result.CompilationDiagnostics
-            .Where(d => d.Severity == DiagnosticSeverity.Error)
-            .ToList();
-
-        Assert.True(errors.Count == 0, string.Join("\n", errors.Select(e => e.ToString())));
+        GeneratorTestHelper.AssertNoUnexpectedErrors(result, "AM003");
     }
 }

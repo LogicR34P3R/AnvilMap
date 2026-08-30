@@ -1,5 +1,3 @@
-using Microsoft.CodeAnalysis;
-
 namespace AnvilMap.Generator.Tests;
 
 // Naming-convention flattening. Covers the resolver-side path matching only - MappingEmitter
@@ -36,7 +34,7 @@ public sealed class UserDto
         Assert.NotNull(result.GeneratedSource);
         Assert.Contains("destination.HomeAddressCity = source.HomeAddress.City;", result.GeneratedSource);
         Assert.DoesNotContain(result.GeneratorDiagnostics, d => d.Id == "AM001");
-        AssertNoCompileErrors(result);
+        GeneratorTestHelper.AssertNoUnexpectedErrors(result);
     }
 
     [Fact]
@@ -71,7 +69,7 @@ public sealed class OrderDto
 
         Assert.NotNull(result.GeneratedSource);
         Assert.Contains("destination.BuyerHomeCity = source.Buyer.Home.City;", result.GeneratedSource);
-        AssertNoCompileErrors(result);
+        GeneratorTestHelper.AssertNoUnexpectedErrors(result);
     }
 
     [Fact]
@@ -101,7 +99,7 @@ public sealed class UserDto
 
         Assert.NotNull(result.GeneratedSource);
         Assert.Contains("source => new global::Sample.UserDto { HomeAddressCity = source.HomeAddress.City };", result.GeneratedSource);
-        AssertNoCompileErrors(result);
+        GeneratorTestHelper.AssertNoUnexpectedErrors(result);
     }
 
     [Fact]
@@ -182,7 +180,7 @@ public sealed class UserDto
         Assert.DoesNotContain(result.GeneratorDiagnostics, d => d.Id == "AM021");
         Assert.DoesNotContain(result.GeneratorDiagnostics, d => d.Id == "AM001");
         Assert.Contains("destination.HomeAddressCity = source.HomeAddress.City;", result.GeneratedSource);
-        AssertNoCompileErrors(result);
+        GeneratorTestHelper.AssertNoUnexpectedErrors(result);
     }
 
     [Fact]
@@ -315,7 +313,7 @@ public sealed class UserDto
         Assert.NotNull(result.GeneratedSource);
         Assert.Contains(result.GeneratorDiagnostics, d => d.Id == "AM010" && d.GetMessage().Contains("HomeAddressCity"));
         Assert.DoesNotContain("HomeAddressCity", result.GeneratedSource);
-        AssertNoCompileErrors(result);
+        GeneratorTestHelper.AssertNoUnexpectedErrors(result);
     }
 
     [Fact]
@@ -360,7 +358,7 @@ public sealed class UserDto
         Assert.DoesNotContain(result.GeneratorDiagnostics, d => d.Id == "AM010");
         Assert.DoesNotContain(result.GeneratorDiagnostics, d => d.Id == "AM001");
         Assert.Contains("destination.HomeAddressCity = global::Sample.User.ResolveHomeAddressCity(source);", result.GeneratedSource);
-        AssertNoCompileErrors(result);
+        GeneratorTestHelper.AssertNoUnexpectedErrors(result);
     }
 
     [Fact]
@@ -419,7 +417,7 @@ public sealed class UserDto
         Assert.NotNull(result.GeneratedSource);
         Assert.Contains("destination.HomeAddressCity = source.HomeAddress.City;", result.GeneratedSource);
         Assert.Contains(result.GeneratorDiagnostics, d => d.Id == "AM001" && d.GetMessage().Contains("HomeAddress") && d.GetMessage().Contains("Sample.User"));
-        AssertNoCompileErrors(result);
+        GeneratorTestHelper.AssertNoUnexpectedErrors(result);
     }
 
     [Fact]
@@ -495,7 +493,7 @@ public sealed class UserDto
         Assert.Contains("destination.HomeAddressCity = source.HomeAddress.City;", result.GeneratedSource);
         // Conditioned, so excluded from the SQL projection (AM005) rather than mistranslated.
         Assert.Contains(result.GeneratorDiagnostics, d => d.Id == "AM005" && d.GetMessage().Contains("HomeAddressCity"));
-        AssertNoCompileErrors(result);
+        GeneratorTestHelper.AssertNoUnexpectedErrors(result);
     }
 
     [Fact]
@@ -526,7 +524,7 @@ public sealed class UserDto
 
         Assert.NotNull(result.GeneratedSource);
         Assert.Contains("destination.HomeAddressCity = source.HomeAddress.City ?? \"Unknown\";", result.GeneratedSource);
-        AssertNoCompileErrors(result);
+        GeneratorTestHelper.AssertNoUnexpectedErrors(result);
     }
 
     [Fact]
@@ -572,7 +570,7 @@ public sealed class UserDto
         Assert.Contains(
             "destination.HomeAddressPrimaryContact = source.HomeAddress.PrimaryContact.ToContactDto();",
             result.GeneratedSource);
-        AssertNoCompileErrors(result);
+        GeneratorTestHelper.AssertNoUnexpectedErrors(result);
     }
 
     [Fact]
@@ -605,7 +603,7 @@ public sealed record UserDto(int Id, string HomeAddressCity);
         Assert.Contains(
             "source => new global::Sample.UserDto(source.Id, source.HomeAddress.City);",
             result.GeneratedSource);
-        AssertNoCompileErrors(result);
+        GeneratorTestHelper.AssertNoUnexpectedErrors(result);
     }
 
     // Explicit dotted-path [MapProperty] (TryResolveExplicitPath) - good weather.
@@ -644,7 +642,7 @@ public sealed class OrderDto
         Assert.NotNull(result.GeneratedSource);
         Assert.DoesNotContain(result.GeneratorDiagnostics, d => d.Id is "AM021" or "AM001");
         Assert.Contains("destination.BuyerCity = source.Buyer.Home.City;", result.GeneratedSource);
-        AssertNoCompileErrors(result);
+        GeneratorTestHelper.AssertNoUnexpectedErrors(result);
     }
 
     [Fact]
@@ -681,7 +679,7 @@ public sealed class UserDto
         Assert.Contains("if (global::Sample.User.ShouldMapCity(source))", result.GeneratedSource);
         Assert.Contains("destination.HomeAddressCity = source.HomeAddress.City;", result.GeneratedSource);
         Assert.Contains(result.GeneratorDiagnostics, d => d.Id == "AM005" && d.GetMessage().Contains("HomeAddressCity"));
-        AssertNoCompileErrors(result);
+        GeneratorTestHelper.AssertNoUnexpectedErrors(result);
     }
 
     [Fact]
@@ -714,7 +712,7 @@ public sealed class UserDto
         Assert.NotNull(result.GeneratedSource);
         Assert.DoesNotContain(result.GeneratorDiagnostics, d => d.Id == "AM019");
         Assert.Contains("destination.HomeAddressCity = source.HomeAddress.City ?? \"Unknown\";", result.GeneratedSource);
-        AssertNoCompileErrors(result);
+        GeneratorTestHelper.AssertNoUnexpectedErrors(result);
     }
 
     [Fact]
@@ -745,7 +743,7 @@ public sealed class UserDto
 
         Assert.NotNull(result.GeneratedSource);
         Assert.Contains("source => new global::Sample.UserDto { HomeAddressCity = source.HomeAddress.City };", result.GeneratedSource);
-        AssertNoCompileErrors(result);
+        GeneratorTestHelper.AssertNoUnexpectedErrors(result);
     }
 
     [Fact]
@@ -790,7 +788,7 @@ public sealed class OrderDto
 
         Assert.NotNull(result.GeneratedSource);
         Assert.Contains("destination.ShippingAddress = source.Buyer.PrimaryAddress.ToAddressDto();", result.GeneratedSource);
-        AssertNoCompileErrors(result);
+        GeneratorTestHelper.AssertNoUnexpectedErrors(result);
     }
 
     [Fact]
@@ -825,7 +823,7 @@ public sealed class UserDto
         Assert.NotNull(result.GeneratedSource);
         Assert.DoesNotContain(result.GeneratorDiagnostics, d => d.Id == "AM021");
         Assert.Contains("destination.HomeAddressCity = source.HomeAddress.City;", result.GeneratedSource);
-        AssertNoCompileErrors(result);
+        GeneratorTestHelper.AssertNoUnexpectedErrors(result);
     }
 
     [Fact]
@@ -861,7 +859,7 @@ public sealed class UserDto
         Assert.NotNull(result.GeneratedSource);
         Assert.Contains("destination.HomeAddressCity = source.HomeAddress.City;", result.GeneratedSource);
         Assert.Contains(result.GeneratorDiagnostics, d => d.Id == "AM001" && d.GetMessage().Contains("HomeAddress") && d.GetMessage().Contains("Sample.User"));
-        AssertNoCompileErrors(result);
+        GeneratorTestHelper.AssertNoUnexpectedErrors(result);
     }
 
     [Fact]
@@ -892,7 +890,7 @@ public sealed record UserDto(int Id, string HomeAddressCity);
         Assert.Contains(
             "source => new global::Sample.UserDto(source.Id, source.HomeAddress.City);",
             result.GeneratedSource);
-        AssertNoCompileErrors(result);
+        GeneratorTestHelper.AssertNoUnexpectedErrors(result);
     }
 
     // Explicit dotted-path [MapProperty] - bad weather.
@@ -1029,14 +1027,5 @@ public sealed class UserDto
         Assert.Contains(result.GeneratorDiagnostics, d => d.Id == "AM012" && d.GetMessage().Contains("[MapProperty]"));
         Assert.DoesNotContain(result.GeneratorDiagnostics, d => d.Id == "AM021");
         Assert.DoesNotContain("destination.HomeAddressCity", result.GeneratedSource);
-    }
-
-    private static void AssertNoCompileErrors(GeneratorTestResult result)
-    {
-        var errors = result.CompilationDiagnostics
-            .Where(d => d.Severity == DiagnosticSeverity.Error)
-            .ToList();
-
-        Assert.True(errors.Count == 0, string.Join("\n", errors.Select(e => e.ToString())));
     }
 }

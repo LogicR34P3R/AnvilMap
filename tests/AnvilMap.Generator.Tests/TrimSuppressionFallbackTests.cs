@@ -102,8 +102,7 @@ public sealed class UserDto
             "UserToUserDtoProjection = source => new global::Sample.UserDto { Id = source.Id, Name = source.Name };",
             source);
 
-        var errors = result.CompilationDiagnostics.Where(d => d.Severity == DiagnosticSeverity.Error).ToList();
-        Assert.True(errors.Count == 0, string.Join("\n", errors.Select(e => e.ToString())));
+        GeneratorTestHelper.AssertNoUnexpectedErrors(result);
     }
 
     [Fact]
@@ -119,8 +118,7 @@ public sealed class UserDto
             source);
         Assert.Contains("[System.Diagnostics.CodeAnalysis.UnconditionalSuppressMessage(\"Trimming\", \"IL2026\"", source);
 
-        var errors = result.CompilationDiagnostics.Where(d => d.Severity == DiagnosticSeverity.Error).ToList();
-        Assert.True(errors.Count == 0, string.Join("\n", errors.Select(e => e.ToString())));
+        GeneratorTestHelper.AssertNoUnexpectedErrors(result);
     }
 
     [Fact]
@@ -156,8 +154,7 @@ public sealed record UserDto(int Id, string Name);
         // unconditional, plain C#, independent of whether any attribute is needed on top of it.
         Assert.Contains("static GeneratedMappings()", source);
 
-        var errors = result.CompilationDiagnostics.Where(d => d.Severity == DiagnosticSeverity.Error).ToList();
-        Assert.True(errors.Count == 0, string.Join("\n", errors.Select(e => e.ToString())));
+        GeneratorTestHelper.AssertNoUnexpectedErrors(result);
     }
 
     [Fact]
@@ -207,7 +204,6 @@ public sealed record LineDto(int Id, string Sku);
             source);
         Assert.Contains("source => new global::Sample.LineDto(source.Id, source.Sku);", source);
 
-        var errors = result.CompilationDiagnostics.Where(d => d.Severity == DiagnosticSeverity.Error).ToList();
-        Assert.True(errors.Count == 0, string.Join("\n", errors.Select(e => e.ToString())));
+        GeneratorTestHelper.AssertNoUnexpectedErrors(result);
     }
 }
