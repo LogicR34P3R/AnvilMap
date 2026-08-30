@@ -101,10 +101,17 @@ internal static partial class MappingResolver
             return CollectionShape.Array;
         }
 
-        if (destination is INamedTypeSymbol { IsGenericType: true } named &&
-            named.Name is "HashSet" or "ISet" or "IReadOnlySet")
+        if (destination is INamedTypeSymbol { IsGenericType: true } named)
         {
-            return CollectionShape.HashSet;
+            switch (named.Name)
+            {
+                case "HashSet" or "ISet" or "IReadOnlySet":
+                    return CollectionShape.HashSet;
+                case "ImmutableArray":
+                    return CollectionShape.ImmutableArray;
+                case "ObservableCollection":
+                    return CollectionShape.ObservableCollection;
+            }
         }
 
         foreach (var iface in destination.AllInterfaces)

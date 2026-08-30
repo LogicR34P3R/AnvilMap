@@ -124,6 +124,20 @@ internal static partial class MappingEmitter
                 continue;
             }
 
+            // Same treatment - ImmutableArray/ObservableCollection materialization isn't
+            // confirmed translatable by SQL query providers (AM023), unlike List/Array/HashSet.
+            if (property is { Kind: PropertyMappingKind.Enumerable, DestinationCollectionShape: CollectionShape.ImmutableArray or CollectionShape.ObservableCollection })
+            {
+                report?.Invoke(Diagnostic.Create(
+                    Diagnostics.CollectionShapeExcludedFromProjection,
+                    Location.None,
+                    property.DestinationPropertyName,
+                    mapping.Source.DisplayName,
+                    mapping.Destination.DisplayName,
+                    property.DestinationType.DisplayName));
+                continue;
+            }
+
             string? valueExpr = property.Kind switch
             {
                 PropertyMappingKind.Direct =>

@@ -334,10 +334,34 @@ internal static partial class MappingEmitter
                     : $"source.{property.SourcePropertyName}.To{property.DestinationType.SimpleName}(new {property.DestinationType.FullyQualifiedName}(), depth + 1)",
 
             PropertyMappingKind.Enumerable when property.ElementDestinationType is not null =>
-                $"source.{property.SourcePropertyName}{(property.SourceIsNullable ? "?." : ".")}Select(x => x.To{property.ElementDestinationType.SimpleName}(new {property.ElementDestinationType.FullyQualifiedName}(), depth + 1)).{MaterializeCall(property.DestinationCollectionShape)}",
+                property.DestinationCollectionShape switch
+                {
+                    CollectionShape.ObservableCollection => BuildRecursiveObservableCollectionValue(property),
+                    CollectionShape.ImmutableArray => BuildRecursiveImmutableArrayValue(property),
+                    _ => $"source.{property.SourcePropertyName}{(property.SourceIsNullable ? "?." : ".")}Select(x => x.To{property.ElementDestinationType.SimpleName}(new {property.ElementDestinationType.FullyQualifiedName}(), depth + 1)).{MaterializeCall(property.DestinationCollectionShape)}"
+                },
 
             _ => null
         };
+
+    private static string BuildRecursiveObservableCollectionValue(PropertyMappingModel property)
+    {
+        var elements = $"source.{property.SourcePropertyName}.Select(x => x.To{property.ElementDestinationType!.SimpleName}(new {property.ElementDestinationType.FullyQualifiedName}(), depth + 1))";
+        var construction = $"new {property.DestinationType.FullyQualifiedName}({elements})";
+
+        return property.SourceIsNullable
+            ? $"source.{property.SourcePropertyName} is null ? null! : {construction}"
+            : construction;
+    }
+
+    private static string BuildRecursiveImmutableArrayValue(PropertyMappingModel property)
+    {
+        var materialized = $"source.{property.SourcePropertyName}.Select(x => x.To{property.ElementDestinationType!.SimpleName}(new {property.ElementDestinationType.FullyQualifiedName}(), depth + 1)).ToImmutableArray()";
+
+        return property.SourceIsNullable
+            ? $"source.{property.SourcePropertyName} is null ? global::System.Collections.Immutable.ImmutableArray<{property.ElementDestinationType.FullyQualifiedName}>.Empty : {materialized}"
+            : materialized;
+    }
 
     private static string? BuildValueExpression(PropertyMappingModel property, bool useNullableReferenceTypes)
     {
@@ -379,6 +403,16 @@ internal static partial class MappingEmitter
             return null;
         }
 
+        if (property.DestinationCollectionShape == CollectionShape.ObservableCollection)
+        {
+            return BuildObservableCollectionValue(property);
+        }
+
+        if (property.DestinationCollectionShape == CollectionShape.ImmutableArray)
+        {
+            return BuildImmutableArrayValue(property);
+        }
+
         var accessor = property.SourceIsNullable ? "?." : ".";
         var materialize = MaterializeCall(property.DestinationCollectionShape);
 
@@ -388,5 +422,38 @@ internal static partial class MappingEmitter
         }
 
         return $"source.{property.SourcePropertyName}{accessor}Select(x => x.To{property.ElementDestinationType.SimpleName}()).{materialize}";
+    }
+
+    // No BCL extension materializes into ObservableCollection<T> - needs a wrapping constructor
+    // call instead of a suffix, so a nullable source needs an explicit null check rather than
+    // `?.` (which can't chain into a `new` expression).
+    private static string BuildObservableCollectionValue(PropertyMappingModel property)
+    {
+        var elements = property.ElementSourceType!.FullyQualifiedName == property.ElementDestinationType!.FullyQualifiedName
+            ? $"source.{property.SourcePropertyName}"
+            : $"source.{property.SourcePropertyName}.Select(x => x.To{property.ElementDestinationType.SimpleName}())";
+
+        var construction = $"new {property.DestinationType.FullyQualifiedName}({elements})";
+
+        return property.SourceIsNullable
+            ? $"source.{property.SourcePropertyName} is null ? null! : {construction}"
+            : construction;
+    }
+
+    // ImmutableArray<T> is a value type - `source.Prop?.ToImmutableArray()` on a nullable source
+    // produces ImmutableArray<T>? (a genuinely different, incompatible type), not just an NRT
+    // warning the way a reference-type shape would get. Falls back to ImmutableArray<T>.Empty
+    // (not `default`, an uninitialized ImmutableArray that throws on most member access).
+    private static string BuildImmutableArrayValue(PropertyMappingModel property)
+    {
+        var elements = property.ElementSourceType!.FullyQualifiedName == property.ElementDestinationType!.FullyQualifiedName
+            ? $"source.{property.SourcePropertyName}"
+            : $"source.{property.SourcePropertyName}.Select(x => x.To{property.ElementDestinationType.SimpleName}())";
+
+        var materialized = $"{elements}.ToImmutableArray()";
+
+        return property.SourceIsNullable
+            ? $"source.{property.SourcePropertyName} is null ? global::System.Collections.Immutable.ImmutableArray<{property.ElementDestinationType.FullyQualifiedName}>.Empty : {materialized}"
+            : materialized;
     }
 }

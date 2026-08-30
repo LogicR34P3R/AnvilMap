@@ -1348,11 +1348,10 @@ public sealed class BasketDto
     [Fact]
     public void UnsupportedCollectionDestination_ReportsAM003InsteadOfEmittingUncompilableToList()
     {
-        // ImmutableArray<T> isn't a recognized shape - must fail closed (AM003), not silently
-        // emit a `.ToList()` that doesn't compile.
+        // Stack<T> isn't a recognized shape and List<T> doesn't convert to it - must fail closed
+        // (AM003), not silently emit a `.ToList()` that doesn't compile.
         var result = GeneratorTestHelper.Run(@"
 using System.Collections.Generic;
-using System.Collections.Immutable;
 using AnvilMap;
 
 namespace Sample;
@@ -1365,7 +1364,7 @@ public sealed class Basket
 
 public sealed class BasketDto
 {
-    public ImmutableArray<int> Numbers { get; set; }
+    public Stack<int> Numbers { get; set; } = new();
 }
 ");
 

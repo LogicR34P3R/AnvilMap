@@ -190,4 +190,12 @@ internal static class Diagnostics
         category: "AnvilMap",
         defaultSeverity: DiagnosticSeverity.Info,
         isEnabledByDefault: true);
+
+    public static readonly DiagnosticDescriptor CollectionShapeExcludedFromProjection = new(
+        id: "AM023",
+        title: "Property excluded from SQL projection due to an unsupported collection shape",
+        messageFormat: "Property '{0}' on '{1}' -> '{2}' materializes into '{3}', which isn't confirmed translatable by SQL query providers, and was left out of the SQL projection (it will be left at its default value there). The imperative mapper still handles it.",
+        category: "AnvilMap",
+        defaultSeverity: DiagnosticSeverity.Info,
+        isEnabledByDefault: true);
 }

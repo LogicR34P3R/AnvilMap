@@ -307,7 +307,16 @@ mapping to `UserDto.HomeAddress` is wired up automatically — no attribute need
 types are mapped *somewhere in the same project*. The same applies to collections
 (`List<T>`/arrays/`IEnumerable<T>`): if the element types have a mapping between them, the
 collection property maps automatically, materialized into whatever collection shape the
-destination declares (`List<T>`, `T[]`, `HashSet<T>`).
+destination declares (`List<T>`, `T[]`, `HashSet<T>`/`ISet<T>`, `ImmutableArray<T>`,
+`ObservableCollection<T>`). `ImmutableArray<T>`/`ObservableCollection<T>` are imperative-only —
+excluded from `.ProjectTo{Dest}()` with `AM023`, since they aren't confirmed translatable by SQL
+query providers the way `List<T>`/`T[]`/`HashSet<T>` are. A destination collection shape this
+generator doesn't recognize (and that `List<T>` doesn't already implicitly convert to) reports
+`AM003` instead of emitting code that wouldn't compile. Note that a `[MapUsing]` override doesn't
+rescue this the way it does for `AM022` (below): AnvilMap emits `[MapUsing]` as a method call in
+the projection, which EF Core's translator can't see into regardless of what the method's body
+does — wrapping `.ToImmutableArray()`/`new ObservableCollection<T>(...)` in your own converter
+doesn't make it any more translatable than the automatic version.
 
 ## Naming-convention flattening
 
@@ -555,6 +564,7 @@ The generator reports build-time diagnostics instead of failing silently or thro
 | AM020 | Warning | `MaxDepth` has no effect: either the destination isn't built via plain mutable-property assignment (a positional record, or one with `init`-only properties, neither of which supports the depth-guard mechanism), or no property on the mapping is actually self-recursive. |
 | AM021 | Warning | An explicit `[MapProperty]` source name doesn't resolve — a plain name that isn't a top-level source property, a dotted path with a segment that doesn't exist, or one with a nullable intermediate segment. Check for a typo, or update the `[MapProperty]` if the source changed. |
 | AM022 | Info | An automatic `enum` → `string` conversion (via `.ToString()`) was left out of the SQL projection — most query providers can't translate it. The imperative mapper still applies it. |
+| AM023 | Info | An `ImmutableArray<T>`/`ObservableCollection<T>` destination property was left out of the SQL projection — not confirmed translatable by SQL query providers. The imperative mapper still materializes it. |
 
 AM001, AM004, and AM009 have one-click IDE code fixes, included automatically alongside the
 generator itself — no separate package reference needed.
