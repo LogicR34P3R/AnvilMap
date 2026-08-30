@@ -100,8 +100,7 @@ public sealed class CustomerDto
         Assert.Contains("namespace AnvilMap" + Environment.NewLine + "{", result.GeneratedSource);
         Assert.Contains("object.ReferenceEquals(source, null)", result.GeneratedSource);
 
-        var errors = result.CompilationDiagnostics.Where(d => d.Severity == DiagnosticSeverity.Error).ToList();
-        Assert.True(errors.Count == 0, string.Join("\n", errors.Select(e => e.ToString())));
+        GeneratorTestHelper.AssertNoUnexpectedErrors(result);
     }
 
     [Fact]
@@ -120,7 +119,6 @@ public sealed class CustomerDto
         Assert.Contains("namespace AnvilMap" + Environment.NewLine + "{", result.GeneratedSource);
         Assert.Contains("object.ReferenceEquals(source, null)", result.GeneratedSource);
 
-        var errors = result.CompilationDiagnostics.Where(d => d.Severity == DiagnosticSeverity.Error).ToList();
-        Assert.True(errors.Count == 0, string.Join("\n", errors.Select(e => e.ToString())));
+        GeneratorTestHelper.AssertNoUnexpectedErrors(result);
     }
 }

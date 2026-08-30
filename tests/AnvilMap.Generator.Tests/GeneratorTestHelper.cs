@@ -79,4 +79,21 @@ internal static class GeneratorTestHelper
             compilationDiagnostics,
             assembly);
     }
+
+    // Checks both diagnostic streams a real consumer's build fails on: compiler errors on the
+    // generated file (CompilationDiagnostics), and this generator's own Error-severity
+    // diagnostics not explicitly expected here (GeneratorDiagnostics) - a separate channel most
+    // tests used to skip, letting a spurious one ship unnoticed.
+    public static void AssertNoUnexpectedErrors(GeneratorTestResult result, params string[] expectedGeneratorErrorIds)
+    {
+        var compileErrors = result.CompilationDiagnostics
+            .Where(d => d.Severity == DiagnosticSeverity.Error)
+            .ToList();
+        Assert.True(compileErrors.Count == 0, string.Join("\n", compileErrors.Select(e => e.ToString())));
+
+        var unexpectedGeneratorErrors = result.GeneratorDiagnostics
+            .Where(d => d.Severity == DiagnosticSeverity.Error && !expectedGeneratorErrorIds.Contains(d.Id))
+            .ToList();
+        Assert.True(unexpectedGeneratorErrors.Count == 0, string.Join("\n", unexpectedGeneratorErrors.Select(e => e.ToString())));
+    }
 }

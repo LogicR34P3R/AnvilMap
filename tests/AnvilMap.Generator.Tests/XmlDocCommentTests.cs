@@ -34,7 +34,7 @@ public sealed class UserDto
         Assert.Contains(
             "/// <summary>Maps a <c>Sample.User</c> onto an existing <c>Sample.UserDto</c> instance.</summary>",
             result.GeneratedSource);
-        AssertNoCompileErrors(result);
+        GeneratorTestHelper.AssertNoUnexpectedErrors(result);
     }
 
     [Fact]
@@ -47,7 +47,7 @@ public sealed class UserDto
             "/// <summary>Projects a queryable of <c>Sample.User</c> to <c>Sample.UserDto</c>, " +
             "translatable by the query provider (e.g. EF Core).</summary>",
             result.GeneratedSource);
-        AssertNoCompileErrors(result);
+        GeneratorTestHelper.AssertNoUnexpectedErrors(result);
     }
 
     [Fact]
@@ -59,7 +59,7 @@ public sealed class UserDto
         Assert.Contains("/// <summary>Maps <paramref name=\"source\"/> to a new <typeparamref name=\"TDestination\"/> instance, resolved by its runtime type.</summary>", result.GeneratedSource);
         Assert.Contains("/// <summary>Maps <paramref name=\"source\"/> to a new <typeparamref name=\"TDestination\"/> instance.</summary>", result.GeneratedSource);
         Assert.Contains("/// <summary>Maps <paramref name=\"source\"/> into the existing <paramref name=\"destination\"/> instance, overwriting its mapped properties in place.</summary>", result.GeneratedSource);
-        AssertNoCompileErrors(result);
+        GeneratorTestHelper.AssertNoUnexpectedErrors(result);
     }
 
     [Fact]
@@ -69,7 +69,7 @@ public sealed class UserDto
 
         Assert.NotNull(result.GeneratedSource);
         Assert.Equal(3, CountOccurrences(result.GeneratedSource!, "/// <inheritdoc/>"));
-        AssertNoCompileErrors(result);
+        GeneratorTestHelper.AssertNoUnexpectedErrors(result);
     }
 
     [Fact]
@@ -109,7 +109,7 @@ public static class Caller
 
         var interceptorsBody = result.GeneratedSource![result.GeneratedSource.IndexOf("file static class Interceptors", StringComparison.Ordinal)..];
         Assert.DoesNotContain("/// <summary>", interceptorsBody);
-        AssertNoCompileErrors(result);
+        GeneratorTestHelper.AssertNoUnexpectedErrors(result);
     }
 
     private static int CountOccurrences(string text, string token)
@@ -124,14 +124,5 @@ public static class Caller
         }
 
         return count;
-    }
-
-    private static void AssertNoCompileErrors(GeneratorTestResult result)
-    {
-        var errors = result.CompilationDiagnostics
-            .Where(d => d.Severity == DiagnosticSeverity.Error)
-            .ToList();
-
-        Assert.True(errors.Count == 0, string.Join("\n", errors.Select(e => e.ToString())));
     }
 }
