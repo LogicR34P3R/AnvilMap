@@ -1,0 +1,17 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- Shared between AnvilMap.Generator (reports AM004/AM009) and AnvilMap.CodeFixes (reads
+       them back to build a stub method) - see StubMethodDiagnosticProperties.cs. Not packed on
+       its own; AnvilMap.Generator.csproj bundles this project's DLL into its own
+       analyzers/dotnet/cs payload alongside AnvilMap.Generator.dll and AnvilMap.CodeFixes.dll. -->
+  <PropertyGroup>
+    <TargetFramework>netstandard2.0</TargetFramework>
+    <LangVersion>latest</LangVersion>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="System.Collections.Immutable" />
+  </ItemGroup>
+
+</Project>

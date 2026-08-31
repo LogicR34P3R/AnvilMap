@@ -3,6 +3,7 @@ using System.Composition;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
+using AnvilMap.CodeFixContracts;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CodeActions;
 using Microsoft.CodeAnalysis.CodeFixes;
@@ -18,9 +19,8 @@ namespace AnvilMap.CodeFixes;
 // [MapTo]-declared mapping, but possibly the destination type for a [MapFrom]-declared one),
 // which is usually a different file than the one the diagnostic is reported against (the
 // destination property) - but the stub's required first parameter is always the source type,
-// even when the stub itself lands on the destination. Both types are located via the
-// "MethodHostMetadataName"/"SourceMetadataName"/"MethodName"/"ReturnType" diagnostic
-// properties set in MappingResolver, not by parsing the message text.
+// even when the stub itself lands on the destination. Both types are located via
+// StubMethodDiagnosticProperties, the shared contract MappingResolver reports them through.
 [ExportCodeFixProvider(LanguageNames.CSharp, Name = nameof(GenerateStubMethodCodeFixProvider)), Shared]
 public sealed class GenerateStubMethodCodeFixProvider : CodeFixProvider
 {
@@ -36,26 +36,16 @@ public sealed class GenerateStubMethodCodeFixProvider : CodeFixProvider
     {
         var diagnostic = context.Diagnostics[0];
 
-        if (!diagnostic.Properties.TryGetValue("MethodHostMetadataName", out var methodHostMetadataName) || methodHostMetadataName is null ||
-            !diagnostic.Properties.TryGetValue("SourceMetadataName", out var sourceMetadataName) || sourceMetadataName is null ||
-            !diagnostic.Properties.TryGetValue("MethodName", out var methodName) || methodName is null)
-        {
-            return Task.CompletedTask;
-        }
-
-        var returnType = diagnostic.Id == ConditionDiagnosticId
-            ? "bool"
-            : diagnostic.Properties.TryGetValue("ReturnType", out var rt) ? rt : null;
-
-        if (returnType is null)
+        if (StubMethodDiagnosticProperties.TryParse(diagnostic.Properties) is not { } properties)
         {
             return Task.CompletedTask;
         }
 
         context.RegisterCodeFix(
             CodeAction.Create(
-                title: $"Generate stub method '{methodName}'",
-                createChangedSolution: ct => AddStubMethodAsync(context.Document, methodHostMetadataName, sourceMetadataName, methodName, returnType, ct),
+                title: $"Generate stub method '{properties.MethodName}'",
+                createChangedSolution: ct => AddStubMethodAsync(
+                    context.Document, properties.MethodHostMetadataName, properties.SourceMetadataName, properties.MethodName, properties.ReturnType, ct),
                 equivalenceKey: diagnostic.Id + "_GenerateStubMethod"),
             diagnostic);
 

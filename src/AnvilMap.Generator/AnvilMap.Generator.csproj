@@ -60,6 +60,12 @@
          places AnvilMap.CodeFixes.dll in this project's own $(OutputPath) alongside
          AnvilMap.Generator.dll, which the pack item below then picks up. -->
     <ProjectReference Include="..\AnvilMap.CodeFixes\AnvilMap.CodeFixes.csproj" PrivateAssets="all" />
+
+    <!-- Same treatment as AnvilMap.CodeFixes above - AnvilMap.CodeFixContracts.dll is a shared
+         implementation detail (the AM004/AM009 diagnostic-property contract), not a published
+         package; PrivateAssets="all" keeps it out of this package's NuGet dependencies, and the
+         pack item below bundles its DLL alongside the other two. -->
+    <ProjectReference Include="..\AnvilMap.CodeFixContracts\AnvilMap.CodeFixContracts.csproj" PrivateAssets="all" />
   </ItemGroup>
   <ItemGroup>
     <AdditionalFiles Include="AnalyzerReleases.Shipped.md" />
@@ -71,6 +77,9 @@
     <!-- Codefixes ship alongside the analyzer in the same analyzers/dotnet/cs folder so a
          consumer installing this package gets both, with no separate package to install. -->
     <None Include="$(OutputPath)\AnvilMap.CodeFixes.dll" Pack="true" PackagePath="analyzers/dotnet/cs" Visible="false" />
+    <!-- Both AnvilMap.Generator and AnvilMap.CodeFixes reference this at runtime (the AM004/
+         AM009 diagnostic-property contract), so it has to ship alongside them the same way. -->
+    <None Include="$(OutputPath)\AnvilMap.CodeFixContracts.dll" Pack="true" PackagePath="analyzers/dotnet/cs" Visible="false" />
     <!-- Auto-configures InterceptorsNamespaces for any consumer of this package - see the
          props file's own comment. Packed under buildTransitive (not just build) so the property
          still flows if this package is ever referenced transitively through another one, not just

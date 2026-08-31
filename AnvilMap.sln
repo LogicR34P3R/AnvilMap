@@ -31,6 +31,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "AnvilMap.Sample.Aot", "samp
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "AnvilMap.InterceptorSmokeTests", "tests\AnvilMap.InterceptorSmokeTests\AnvilMap.InterceptorSmokeTests.csproj", "{71748E34-CFEB-40D0-820F-1B07D3D3AD13}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "AnvilMap.CodeFixContracts", "src\AnvilMap.CodeFixContracts\AnvilMap.CodeFixContracts.csproj", "{E3C027D4-89FE-4968-B050-A0528DF34D56}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -161,6 +163,18 @@ Global
 		{71748E34-CFEB-40D0-820F-1B07D3D3AD13}.Release|x64.Build.0 = Release|Any CPU
 		{71748E34-CFEB-40D0-820F-1B07D3D3AD13}.Release|x86.ActiveCfg = Release|Any CPU
 		{71748E34-CFEB-40D0-820F-1B07D3D3AD13}.Release|x86.Build.0 = Release|Any CPU
+		{E3C027D4-89FE-4968-B050-A0528DF34D56}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{E3C027D4-89FE-4968-B050-A0528DF34D56}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{E3C027D4-89FE-4968-B050-A0528DF34D56}.Debug|x64.ActiveCfg = Debug|Any CPU
+		{E3C027D4-89FE-4968-B050-A0528DF34D56}.Debug|x64.Build.0 = Debug|Any CPU
+		{E3C027D4-89FE-4968-B050-A0528DF34D56}.Debug|x86.ActiveCfg = Debug|Any CPU
+		{E3C027D4-89FE-4968-B050-A0528DF34D56}.Debug|x86.Build.0 = Debug|Any CPU
+		{E3C027D4-89FE-4968-B050-A0528DF34D56}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{E3C027D4-89FE-4968-B050-A0528DF34D56}.Release|Any CPU.Build.0 = Release|Any CPU
+		{E3C027D4-89FE-4968-B050-A0528DF34D56}.Release|x64.ActiveCfg = Release|Any CPU
+		{E3C027D4-89FE-4968-B050-A0528DF34D56}.Release|x64.Build.0 = Release|Any CPU
+		{E3C027D4-89FE-4968-B050-A0528DF34D56}.Release|x86.ActiveCfg = Release|Any CPU
+		{E3C027D4-89FE-4968-B050-A0528DF34D56}.Release|x86.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
@@ -176,5 +190,6 @@ Global
 		{4A62784B-025B-405D-AB0C-0E529728D045} = {0AB3BF05-4346-4AA6-1389-037BE0695223}
 		{3D0933B8-51FE-4DD6-A472-6F200156613D} = {5D20AA90-6969-D8BD-9DCD-8634F4692FDA}
 		{71748E34-CFEB-40D0-820F-1B07D3D3AD13} = {0AB3BF05-4346-4AA6-1389-037BE0695223}
+		{E3C027D4-89FE-4968-B050-A0528DF34D56} = {827E0CD3-B72D-47B6-A68D-7590B98EB39B}
 	EndGlobalSection
 EndGlobal

@@ -7,4 +7,7 @@
   <ItemGroup>
     <PackageReference Include="Microsoft.CodeAnalysis.CSharp.Workspaces" VersionOverride="4.8.0" PrivateAssets="all" />
   </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\AnvilMap.CodeFixContracts\AnvilMap.CodeFixContracts.csproj" />
+  </ItemGroup>
 </Project>

@@ -1,7 +1,7 @@
 using System;
 using System.Collections.Generic;
-using System.Collections.Immutable;
 using System.Linq;
+using AnvilMap.CodeFixContracts;
 using Microsoft.CodeAnalysis;
 
 namespace AnvilMap.Generator;
@@ -56,14 +56,13 @@ internal static partial class MappingResolver
         // Properties let AnvilMap.CodeFixes locate the method-host type (where the stub
         // is inserted) and the source type (the stub's required parameter type - these differ
         // for a [MapFrom]-declared mapping, where the method lives on the destination but its
-        // first parameter is still TSource) without parsing the message text.
+        // first parameter is still TSource) without parsing the message text. ReturnType is
+        // always "bool" here - a [MapCondition] stub's signature never varies.
         report?.Invoke(Diagnostic.Create(
             Diagnostics.ConditionMethodNotFound,
             destinationProperty.Locations.FirstOrDefault() ?? Location.None,
-            ImmutableDictionary<string, string?>.Empty
-                .Add("MethodHostMetadataName", GetMetadataName(methodHost))
-                .Add("SourceMetadataName", GetMetadataName(source))
-                .Add("MethodName", conditionName),
+            new StubMethodDiagnosticProperties(GetMetadataName(methodHost), GetMetadataName(source), conditionName, "bool")
+                .ToImmutableDictionary(),
             source.ToDisplayString(),
             destinationProperty.Name,
             conditionName,
