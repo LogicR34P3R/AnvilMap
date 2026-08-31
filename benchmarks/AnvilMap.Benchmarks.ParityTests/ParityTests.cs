@@ -134,4 +134,21 @@ public sealed class ParityTests
         Assert.Equal(generated.FullName, auto.FullName);
         Assert.Equal("Ada Lovelace", generated.FullName);
     }
+
+    [Fact]
+    public void Polymorphic_DispatchesToTheDerivedDtoWithEquivalentOutput()
+    {
+        Animal source = new Dog { Name = "Rex", Breed = "Labrador" };
+
+        var generated = source.ToAnimalDto();
+        var auto = _autoMapper.Map<AnimalDto>(source);
+
+        var generatedDog = Assert.IsType<DogDto>(generated);
+        var autoDog = Assert.IsType<DogDto>(auto);
+
+        Assert.Equal(generatedDog.Name, autoDog.Name);
+        Assert.Equal(generatedDog.Breed, autoDog.Breed);
+        Assert.Equal("Rex", generatedDog.Name);
+        Assert.Equal("Labrador", generatedDog.Breed);
+    }
 }

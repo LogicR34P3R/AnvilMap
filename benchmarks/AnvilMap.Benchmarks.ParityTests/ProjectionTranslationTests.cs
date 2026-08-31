@@ -88,6 +88,27 @@ public sealed class ProjectionTranslationTests
     }
 
     [Fact]
+    public void Graph_InlineInProjection_SplicesIntoSqlInsteadOfCallingIt()
+    {
+        var (connection, options) = CreateDatabase();
+        using var connectionScope = connection;
+
+        using var db = new BenchmarkDbContext(options);
+
+        // HeadlineLength's [MapUsing] opts into InlineInProjection - the converter's own body
+        // (source.Headline.Length) is spliced into the projection, so EF Core's Sqlite provider
+        // translates it to a real SQL length(...) call instead of AnvilMap emitting an opaque
+        // call to ComputeHeadlineLength that the provider could never translate.
+        var sql = db.Blogs.ProjectToGraphBlogDto().ToQueryString();
+
+        Assert.Contains("length(", sql, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("ComputeHeadlineLength", sql);
+
+        var results = db.Blogs.ProjectToGraphBlogDto().ToList();
+        Assert.Equal("Post 1".Length, results.Single().Posts.Single().HeadlineLength);
+    }
+
+    [Fact]
     public void Conditional_AutoMapperProjection_IgnoresConditionAndLeaksColumn()
     {
         var (connection, options) = CreateDatabase();

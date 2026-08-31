@@ -378,6 +378,12 @@ internal static partial class MappingEmitter
         {
             var isRecursive = recursionContext is not null && IsSelfRecursive(property, recursionContext);
 
+            if (!isRecursive && ShouldUseLoopMaterialization(property))
+            {
+                EmitLoopMaterializedAssignment(writer, property);
+                continue;
+            }
+
             var value = isRecursive
                 ? BuildRecursiveValueExpression(property, useNullableReferenceTypes)
                 : BuildValueExpression(property, useNullableReferenceTypes);
@@ -413,6 +419,74 @@ internal static partial class MappingEmitter
             {
                 writer.WriteLine($"destination.{property.DestinationPropertyName} = {value};");
             }
+        }
+    }
+
+    // A presized loop instead of `source.Prop.Select(x => x.ToDto()).ToList()` - skips the
+    // Select iterator allocation and its per-element delegate/enumerator indirection. Only
+    // reachable for a non-recursive Enumerable property whose source Count/Length is cheap
+    // (List<T>/array - see SourceCountAccessor) and whose destination is List<T>/T[]; every
+    // other shape (same element type, HashSet/ImmutableArray/ObservableCollection, a nullable
+    // source, the self-recursive MaxDepth case) still goes through BuildValueExpression/
+    // BuildRecursiveValueExpression unchanged.
+    private static bool ShouldUseLoopMaterialization(PropertyMappingModel property)
+        => property.Kind == PropertyMappingKind.Enumerable &&
+           !property.DestinationIsInitOnly &&
+           !property.SourceIsNullable &&
+           property.SourceCountAccessor != SourceCountAccessor.None &&
+           property.DestinationCollectionShape is CollectionShape.List or CollectionShape.Array &&
+           property.ElementSourceType is not null &&
+           property.ElementDestinationType is not null &&
+           property.ElementSourceType.FullyQualifiedName != property.ElementDestinationType.FullyQualifiedName;
+
+    private static void EmitLoopMaterializedAssignment(CodeWriter writer, PropertyMappingModel property)
+    {
+        var countExpr = $"source.{property.SourcePropertyName}.{(property.SourceCountAccessor == SourceCountAccessor.Length ? "Length" : "Count")}";
+        var elementType = property.ElementDestinationType!.FullyQualifiedName;
+        var elementValue = $"source.{property.SourcePropertyName}[i].To{property.ElementDestinationType.SimpleName}()";
+        var destinationProperty = property.DestinationPropertyName;
+
+        string? guard = property.ConditionMethodName is null
+            ? null
+            : property.ConditionAcceptsDestination
+                ? $"{property.MethodHostType!.FullyQualifiedName}.{property.ConditionMethodName}(source, destination)"
+                : $"{property.MethodHostType!.FullyQualifiedName}.{property.ConditionMethodName}(source)";
+
+        void EmitBody()
+        {
+            if (property.DestinationCollectionShape == CollectionShape.Array)
+            {
+                writer.WriteLine($"destination.{destinationProperty} = new {elementType}[{countExpr}];");
+                writer.WriteLine($"for (var i = 0; i < {countExpr}; i++)");
+                using (writer.Indent())
+                {
+                    writer.WriteLine($"destination.{destinationProperty}[i] = {elementValue};");
+                }
+            }
+            else
+            {
+                writer.WriteLine($"destination.{destinationProperty} = new List<{elementType}>({countExpr});");
+                writer.WriteLine($"for (var i = 0; i < {countExpr}; i++)");
+                using (writer.Indent())
+                {
+                    writer.WriteLine($"destination.{destinationProperty}.Add({elementValue});");
+                }
+            }
+        }
+
+        if (guard is null)
+        {
+            EmitBody();
+            return;
+        }
+
+        // Multiple statements need real braces, unlike EmitAssignments' own single-statement
+        // guarded assignment above - writer.Indent() has none, so it would only gate the first
+        // line and let the for-loop run unconditionally.
+        writer.WriteLine($"if ({guard})");
+        using (writer.Block())
+        {
+            EmitBody();
         }
     }
 

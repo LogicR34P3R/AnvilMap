@@ -151,7 +151,7 @@ public sealed class UserDto
     }
 
     [Fact]
-    public void EnumerableMapping_GeneratesSelectToList()
+    public void EnumerableMapping_ListSource_UsesPresizedLoop()
     {
         var result = GeneratorTestHelper.Run(@"
 using System.Collections.Generic;
@@ -174,6 +174,122 @@ public sealed class ItemDto
 public sealed class Basket
 {
     public List<Item> Items { get; set; } = new();
+}
+
+public sealed class BasketDto
+{
+    public List<ItemDto> Items { get; set; } = new();
+}
+");
+
+        Assert.NotNull(result.GeneratedSource);
+        Assert.Contains("destination.Items = new List<global::Sample.ItemDto>(source.Items.Count);", result.GeneratedSource);
+        Assert.Contains("for (var i = 0; i < source.Items.Count; i++)", result.GeneratedSource);
+        Assert.Contains("destination.Items.Add(source.Items[i].ToItemDto());", result.GeneratedSource);
+        GeneratorTestHelper.AssertNoUnexpectedErrors(result);
+    }
+
+    [Fact]
+    public void EnumerableMapping_ArraySource_UsesPresizedLoop()
+    {
+        var result = GeneratorTestHelper.Run(@"
+using AnvilMap;
+
+namespace Sample;
+
+[MapTo(typeof(ItemDto))]
+public sealed class Item
+{
+    public int Id { get; set; }
+}
+
+public sealed class ItemDto
+{
+    public int Id { get; set; }
+}
+
+[MapTo(typeof(BasketDto))]
+public sealed class Basket
+{
+    public Item[] Items { get; set; } = System.Array.Empty<Item>();
+}
+
+public sealed class BasketDto
+{
+    public ItemDto[] Items { get; set; } = System.Array.Empty<ItemDto>();
+}
+");
+
+        Assert.NotNull(result.GeneratedSource);
+        Assert.Contains("destination.Items = new global::Sample.ItemDto[source.Items.Length];", result.GeneratedSource);
+        Assert.Contains("for (var i = 0; i < source.Items.Length; i++)", result.GeneratedSource);
+        Assert.Contains("destination.Items[i] = source.Items[i].ToItemDto();", result.GeneratedSource);
+        GeneratorTestHelper.AssertNoUnexpectedErrors(result);
+    }
+
+    [Fact]
+    public void EnumerableMapping_NullableListSource_StillUsesSelectToList()
+    {
+        var result = GeneratorTestHelper.Run(@"
+using System.Collections.Generic;
+using AnvilMap;
+
+#nullable enable
+
+namespace Sample;
+
+[MapTo(typeof(ItemDto))]
+public sealed class Item
+{
+    public int Id { get; set; }
+}
+
+public sealed class ItemDto
+{
+    public int Id { get; set; }
+}
+
+[MapTo(typeof(BasketDto))]
+public sealed class Basket
+{
+    public List<Item>? Items { get; set; }
+}
+
+public sealed class BasketDto
+{
+    public List<ItemDto>? Items { get; set; }
+}
+");
+
+        Assert.NotNull(result.GeneratedSource);
+        Assert.Contains("destination.Items = source.Items?.Select(x => x.ToItemDto()).ToList();", result.GeneratedSource);
+        GeneratorTestHelper.AssertNoUnexpectedErrors(result);
+    }
+
+    [Fact]
+    public void EnumerableMapping_IEnumerableSource_StillUsesSelectToList()
+    {
+        var result = GeneratorTestHelper.Run(@"
+using System.Collections.Generic;
+using AnvilMap;
+
+namespace Sample;
+
+[MapTo(typeof(ItemDto))]
+public sealed class Item
+{
+    public int Id { get; set; }
+}
+
+public sealed class ItemDto
+{
+    public int Id { get; set; }
+}
+
+[MapTo(typeof(BasketDto))]
+public sealed class Basket
+{
+    public IEnumerable<Item> Items { get; set; } = new List<Item>();
 }
 
 public sealed class BasketDto
@@ -1203,7 +1319,8 @@ public sealed class BasketDto
 ");
 
         Assert.NotNull(result.GeneratedSource);
-        Assert.Contains("destination.Items = source.Items.Select(x => x.ToItemDto()).ToList();", result.GeneratedSource);
+        Assert.Contains("destination.Items = new List<global::Sample.ItemDto>(source.Items.Count);", result.GeneratedSource);
+        Assert.Contains("destination.Items.Add(source.Items[i].ToItemDto());", result.GeneratedSource);
         GeneratorTestHelper.AssertNoUnexpectedErrors(result);
     }
 

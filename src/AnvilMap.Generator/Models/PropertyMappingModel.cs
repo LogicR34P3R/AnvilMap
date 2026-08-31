@@ -31,4 +31,7 @@ internal sealed record PropertyMappingModel(
     // the generated call with this instead of assuming the mapping's source type.
     TypeModel? MethodHostType = null,
     // Set only for Kind == EnumConversion - which built-in conversion to emit.
-    EnumConversionKind? EnumConversion = null);
+    EnumConversionKind? EnumConversion = null,
+    // Set only for Kind == Enumerable - None unless the source property's own declared type is
+    // exactly List<T> or an array, whose Count/Length is cheap without enumerating.
+    SourceCountAccessor SourceCountAccessor = SourceCountAccessor.None);
