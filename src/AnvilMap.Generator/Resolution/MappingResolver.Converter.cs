@@ -1,6 +1,6 @@
 using System;
-using System.Collections.Immutable;
 using System.Linq;
+using AnvilMap.CodeFixContracts;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 
@@ -47,11 +47,12 @@ internal static partial class MappingResolver
         report?.Invoke(Diagnostic.Create(
             Diagnostics.ConverterMethodNotFound,
             destinationProperty.Locations.FirstOrDefault() ?? Location.None,
-            ImmutableDictionary<string, string?>.Empty
-                .Add("MethodHostMetadataName", GetMetadataName(methodHost))
-                .Add("SourceMetadataName", GetMetadataName(source))
-                .Add("MethodName", converterMethodName)
-                .Add("ReturnType", destinationProperty.Type.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)),
+            new StubMethodDiagnosticProperties(
+                    GetMetadataName(methodHost),
+                    GetMetadataName(source),
+                    converterMethodName,
+                    destinationProperty.Type.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat))
+                .ToImmutableDictionary(),
             source.ToDisplayString(),
             destinationProperty.Name,
             converterMethodName,

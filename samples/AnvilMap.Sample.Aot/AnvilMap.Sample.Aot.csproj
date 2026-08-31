@@ -17,6 +17,13 @@
     <ProjectReference Include="..\..\src\AnvilMap.Generator\AnvilMap.Generator.csproj"
                       OutputItemType="Analyzer"
                       ReferenceOutputAssembly="false" />
+    <!-- The generator itself now depends on AnvilMap.CodeFixContracts at runtime - an
+         OutputItemType="Analyzer" reference only passes the compiler the referenced project's
+         own DLL, not its dependencies, so this needs referencing the same way too or the
+         generator fails to load with a FileNotFoundException. -->
+    <ProjectReference Include="..\..\src\AnvilMap.CodeFixContracts\AnvilMap.CodeFixContracts.csproj"
+                      OutputItemType="Analyzer"
+                      ReferenceOutputAssembly="false" />
   </ItemGroup>
 
 </Project>
