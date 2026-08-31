@@ -49,8 +49,8 @@ internal static partial class MappingResolver
 
         // Write-only properties (no getter) can't be a mapping source, so excluded here.
         // GetInstanceProperties (not source.GetMembers() directly) also picks up properties
-        // inherited from a base class - load-bearing for F16's polymorphic [MapInclude] pairs,
-        // whose whole premise is a derived source type reusing its base's shared properties.
+        // inherited from a base class - load-bearing for [MapInclude]'s polymorphic pairs, whose
+        // whole premise is a derived source type reusing its base's shared properties.
         var sourceProperties = GetInstanceProperties(source)
             .Where(p => p.GetMethod is not null)
             .ToDictionary(p => p.Name);
@@ -322,7 +322,8 @@ internal static partial class MappingResolver
                 resolution.DestinationShape,
                 DefaultValueLiteral: propertyDefault,
                 MethodHostType: conditionMethodName is null ? null : TypeModel.From(declaration.MethodHostSymbol),
-                EnumConversion: resolution.EnumConversion));
+                EnumConversion: resolution.EnumConversion,
+                SourceCountAccessor: resolution.SourceCountAccessor));
         }
 
         // A 'required' destination property that never made it into `properties` above (for
@@ -502,11 +503,10 @@ internal static partial class MappingResolver
 
     // GetMembers() alone only returns members declared directly on `type`, not ones inherited
     // from a base class - walking the chain here is needed for an ordinary mapping whose source
-    // or destination has a base class at all, and load-bearing for F16's polymorphic
-    // [MapInclude] pairs specifically, whose whole premise is a derived type reusing shared
-    // properties declared on the common base rather than redeclaring them. Deduplicated by name,
-    // most-derived declaration wins (mirrors ordinary member-hiding semantics) - a `new`-hiding
-    // property is a rare edge case, not specially handled beyond that.
+    // or destination has a base class at all, and load-bearing for [MapInclude]'s polymorphic
+    // pairs specifically, whose whole premise is a derived type reusing shared properties
+    // declared on the common base rather than redeclaring them. Deduplicated by name,
+    // most-derived declaration wins (mirrors ordinary member-hiding semantics).
     private static IEnumerable<IPropertySymbol> GetInstanceProperties(INamedTypeSymbol type)
     {
         var seen = new HashSet<string>();

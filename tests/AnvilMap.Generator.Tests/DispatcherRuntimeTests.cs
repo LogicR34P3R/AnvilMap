@@ -939,9 +939,9 @@ public sealed class UserDto
     [Fact]
     public void Flattening_RuntimeProducesCorrectValueThroughNestedChain()
     {
-        // F9: source-text assertions elsewhere prove the right chain is *emitted*; this compiles
-        // and actually invokes it, proving `source.HomeAddress.City` reads the real runtime
-        // value through a real nested object, not just a string that happens to look right.
+        // Source-text assertions elsewhere prove the right chain is *emitted*; this compiles and
+        // actually invokes it, proving `source.HomeAddress.City` reads the real runtime value
+        // through a real nested object, not just a string that happens to look right.
         const string source = @"
 using AnvilMap;
 

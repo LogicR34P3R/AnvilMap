@@ -16,7 +16,8 @@ public sealed class BenchmarkProfile : Profile
         CreateMap<OrderSource, OrderDto>();
 
         CreateMap<GraphComment, GraphCommentDto>();
-        CreateMap<GraphPost, GraphPostDto>();
+        CreateMap<GraphPost, GraphPostDto>()
+            .ForMember(d => d.HeadlineLength, opt => opt.MapFrom(src => src.Headline.Length));
         CreateMap<GraphBlog, GraphBlogDto>();
 
         CreateMap<ConditionalSource, ConditionalDto>()
@@ -24,5 +25,11 @@ public sealed class BenchmarkProfile : Profile
 
         CreateMap<ConvertedSource, ConvertedDto>()
             .ForMember(d => d.FullName, opt => opt.MapFrom(src => $"{src.FirstName} {src.LastName}"));
+
+        CreateMap<Animal, AnimalDto>()
+            .Include<Dog, DogDto>()
+            .Include<Cat, CatDto>();
+        CreateMap<Dog, DogDto>();
+        CreateMap<Cat, CatDto>();
     }
 }

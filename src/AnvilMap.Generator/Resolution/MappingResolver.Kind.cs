@@ -26,9 +26,11 @@ internal static partial class MappingResolver
             TryGetEnumerableElement(destination, out var destinationElement) &&
             DetermineCollectionShape(compilation, destinationElement, destination) is { } destinationShape)
         {
+            var sourceCountAccessor = DetermineSourceCountAccessor(source);
+
             if (SymbolEqualityComparer.Default.Equals(sourceElement, destinationElement))
             {
-                return new KindResolution(PropertyMappingKind.Enumerable, sourceElement, destinationElement, destinationShape);
+                return new KindResolution(PropertyMappingKind.Enumerable, sourceElement, destinationElement, destinationShape, SourceCountAccessor: sourceCountAccessor);
             }
 
             if (TryGetNamedType(sourceElement, out var sourceElementNamed) &&
@@ -38,7 +40,7 @@ internal static partial class MappingResolver
                     destinationElementNamed.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat),
                     out _))
             {
-                return new KindResolution(PropertyMappingKind.Enumerable, sourceElement, destinationElement, destinationShape);
+                return new KindResolution(PropertyMappingKind.Enumerable, sourceElement, destinationElement, destinationShape, SourceCountAccessor: sourceCountAccessor);
             }
         }
 
@@ -88,7 +90,28 @@ internal static partial class MappingResolver
         ITypeSymbol? ElementSource,
         ITypeSymbol? ElementDestination,
         CollectionShape DestinationShape = CollectionShape.List,
-        EnumConversionKind? EnumConversion = null);
+        EnumConversionKind? EnumConversion = null,
+        SourceCountAccessor SourceCountAccessor = SourceCountAccessor.None);
+
+    // List<T>/an array are the only shapes whose Count/Length is known without enumerating -
+    // deliberately not any ICollection<T>-implementing type, since a custom implementation's own
+    // Count accessor isn't guaranteed cheap the way the BCL's own two are.
+    private static SourceCountAccessor DetermineSourceCountAccessor(ITypeSymbol source)
+    {
+        if (source is IArrayTypeSymbol { Rank: 1 })
+        {
+            return SourceCountAccessor.Length;
+        }
+
+        if (source is INamedTypeSymbol { IsGenericType: true, Name: "List" } named &&
+            named.TypeArguments.Length == 1 &&
+            named.ContainingNamespace?.ToDisplayString() == "System.Collections.Generic")
+        {
+            return SourceCountAccessor.Count;
+        }
+
+        return SourceCountAccessor.None;
+    }
 
     // Null (not a silent List default) when List<elementType> isn't actually assignable to
     // destination - e.g. Dictionary<K,V>/IReadOnlyDictionary<K,V> both pass
