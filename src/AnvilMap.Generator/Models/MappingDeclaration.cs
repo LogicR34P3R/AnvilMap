@@ -28,6 +28,40 @@ internal sealed record MappingDeclaration(
     int MaxDepth = 0,
     IReadOnlyList<ExplicitIncludeMapping>? ExplicitIncludes = null)
 {
+    // Hand-written Equals/GetHashCode, deliberately excluding SourceSymbol/DestinationSymbol/
+    // MethodHostSymbol: Roslyn symbols aren't safely comparable across incremental-generator
+    // runs (see TypeModel.cs's own comment - that's exactly why Source/Destination exist as a
+    // TypeModel pair alongside the raw symbols here), so leaving them in the synthesized
+    // record equality meant two structurally-identical declarations from two separate
+    // Discover() runs almost never compared equal, defeating the incremental pipeline's own
+    // per-node caching upstream of Collect() in MappingSourceGenerator.cs. The four
+    // Explicit*Mapping fields are array-backed IReadOnlyList<T>s (arrays don't override
+    // Equals), so those need SequenceEqual instead of the synthesized reference comparison too.
+    public bool Equals(MappingDeclaration? other) =>
+        other is not null
+        && Source == other.Source
+        && Destination == other.Destination
+        && GenerateReverse == other.GenerateReverse
+        && MaxDepth == other.MaxDepth
+        && ExplicitProperties.SequenceEqual(other.ExplicitProperties)
+        && ExplicitConditions.SequenceEqual(other.ExplicitConditions)
+        && ExplicitConverters.SequenceEqual(other.ExplicitConverters)
+        && ExplicitDefaults.SequenceEqual(other.ExplicitDefaults)
+        && (ExplicitIncludes ?? Array.Empty<ExplicitIncludeMapping>())
+            .SequenceEqual(other.ExplicitIncludes ?? Array.Empty<ExplicitIncludeMapping>());
+
+    public override int GetHashCode() =>
+        HashCombine.Combine(
+            Source,
+            Destination,
+            GenerateReverse,
+            MaxDepth,
+            HashCombine.CombineSequence(ExplicitProperties),
+            HashCombine.CombineSequence(ExplicitConditions),
+            HashCombine.CombineSequence(ExplicitConverters),
+            HashCombine.CombineSequence(ExplicitDefaults),
+            HashCombine.CombineSequence(ExplicitIncludes));
+
     // Declares each field's reversal behavior next to the record itself, so a future field
     // addition has to be a visible, greppable decision here rather than a silent gap in
     // MappingGraph's reverse-construction call site. Conditions/converters/defaults/includes
