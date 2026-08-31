@@ -994,8 +994,9 @@ public sealed class UserDto
         GeneratorTestHelper.AssertNoUnexpectedErrors(result);
     }
 
+    // Default behavior: honored in the projection as a call, not a body splice.
     [Fact]
-    public void MapUsing_InlinedInProjection()
+    public void MapUsing_EmitsMethodCallInProjectionByDefault()
     {
         var result = GeneratorTestHelper.Run(@"
 using AnvilMap;

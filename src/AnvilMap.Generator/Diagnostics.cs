@@ -246,4 +246,12 @@ internal static class Diagnostics
         category: "AnvilMap",
         defaultSeverity: DiagnosticSeverity.Warning,
         isEnabledByDefault: true);
+
+    public static readonly DiagnosticDescriptor MapUsingInlineNotEligible = new(
+        id: "AM030",
+        title: "[MapUsing] InlineInProjection couldn't inline the converter's body",
+        messageFormat: "The [MapUsing] on '{1}' for destination property '{0}' sets InlineInProjection = true, but {2} - falling back to a method call in the projection instead (translatability then depends on the query provider recognizing that call, same as a [MapUsing] without InlineInProjection)",
+        category: "AnvilMap",
+        defaultSeverity: DiagnosticSeverity.Warning,
+        isEnabledByDefault: true);
 }

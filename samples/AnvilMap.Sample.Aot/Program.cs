@@ -46,8 +46,9 @@ Verify("IMapper", mapper.Map<Order, OrderDto>(internalOrder), internalOrder);
 
 // Compiling and invoking the projection field directly proves, under real Native AOT, that
 // expression-tree compilation works and the property accessors Expression.Bind reflects over
-// (the IL2026 trim warning) weren't trimmed away. AM005/AM022/AM023 exclude InternalNotes/Status/
-// Tags/RecentNotes from this expression tree, so those are checked separately below.
+// (the IL2026 trim warning) weren't trimmed away. Total's [MapUsing] uses InlineInProjection,
+// so this also proves a spliced converter body (a LINQ .Sum() lambda) survives AOT trimming.
+// AM005/AM022/AM023 exclude InternalNotes/Status/Tags/RecentNotes, checked separately below.
 var compiled = GeneratedMappings.OrderToOrderDtoProjection.Compile();
 var compiledExternal = compiled(external);
 var compiledInternal = compiled(internalOrder);
@@ -109,7 +110,7 @@ static void Verify(
     }
 
     var expectedTotal = source.LineItems.Sum(item => item.Quantity * item.UnitPrice);
-    Assert(dto.Total == expectedTotal, "Total ([MapUsing] converter)");
+    Assert(dto.Total == expectedTotal, "Total ([MapUsing] converter, InlineInProjection)");
 
     Assert(dto.StatusCode == (int)source.Status, "StatusCode (built-in enum -> underlying-type conversion)");
     Assert(dto.PromoCode == (source.PromoCode ?? "NONE"), "PromoCode ([MapDefault])");

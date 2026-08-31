@@ -71,9 +71,13 @@ Check(new Animal { Name = "Generic" }.ToAnimalDto() is AnimalDto and not DogDto,
 Check(GeneratedMappings.Map<AnimalDto>((object)dog) is DogDto { Breed: "Labrador" }, "[MapInclude] via generic dispatcher (runtime-type-keyed)");
 Check(mapper.Map<Animal, AnimalDto>(dog) is DogDto { Breed: "Labrador" }, "[MapInclude] via IMapper");
 
+var compiledProductProjection = GeneratedMappings.ProductToProductDtoProjection.Compile()(product);
+Check(compiledProductProjection.DisplayPrice == "$20.00", "[MapUsing] InlineInProjection - compiled projection expression");
+
 Console.WriteLine("Smoke test passed: AnvilMap.Generator + AnvilMap.Abstractions work correctly from packed NuGet packages.");
 
 VerifyInterceptors();
+VerifyInlineProjection();
 
 static void Check(bool condition, string what)
 {
@@ -84,6 +88,32 @@ static void Check(bool condition, string what)
 }
 
 static void VerifyInterceptors()
+{
+    var text = ReadGeneratedMappingsSource();
+
+#if NET10_0_OR_GREATER
+    Check(text.Contains("InterceptsLocation("), "Interceptor emitted on a C# 14 (net10.0) consumer");
+    Check(text.Contains("class Interceptors"), "Interceptor container class emitted on a C# 14 (net10.0) consumer");
+    Console.WriteLine("Interceptor smoke test passed: net10.0 consumer got real [InterceptsLocation] redirects.");
+#else
+    Check(!text.Contains("InterceptsLocation"), "No interceptor on a pre-C#14 (net8.0) consumer");
+    Check(!text.Contains("class Interceptors"), "No interceptor container class on a pre-C#14 (net8.0) consumer");
+    Console.WriteLine("Interceptor smoke test passed: net8.0 consumer (control) got no interception, dispatcher still worked above.");
+#endif
+}
+
+static void VerifyInlineProjection()
+{
+    var text = ReadGeneratedMappingsSource();
+    var projectionLine = text.Split('\n').FirstOrDefault(l => l.Contains("ProductToProductDtoProjection ="));
+
+    Check(projectionLine is not null, "Projection field initializer for Product -> ProductDto exists");
+    Check(!projectionLine!.Contains("FormatPrice("), "InlineInProjection spliced the converter body instead of calling it");
+    Check(projectionLine.Contains("(source).Price.ToString(\"F2\""), "Inlined converter body is present in the projection");
+    Console.WriteLine("Inline-projection smoke test passed: [MapUsing] InlineInProjection spliced into the real generated projection.");
+}
+
+static string ReadGeneratedMappingsSource()
 {
     var path = Path.Combine(
         ProjectDirectory(),
@@ -102,17 +132,7 @@ static void VerifyInterceptors()
         throw new InvalidOperationException($"Smoke test failed: expected the real generated file at {path}.");
     }
 
-    var text = File.ReadAllText(path);
-
-#if NET10_0_OR_GREATER
-    Check(text.Contains("InterceptsLocation("), "Interceptor emitted on a C# 14 (net10.0) consumer");
-    Check(text.Contains("class Interceptors"), "Interceptor container class emitted on a C# 14 (net10.0) consumer");
-    Console.WriteLine("Interceptor smoke test passed: net10.0 consumer got real [InterceptsLocation] redirects.");
-#else
-    Check(!text.Contains("InterceptsLocation"), "No interceptor on a pre-C#14 (net8.0) consumer");
-    Check(!text.Contains("class Interceptors"), "No interceptor container class on a pre-C#14 (net8.0) consumer");
-    Console.WriteLine("Interceptor smoke test passed: net8.0 consumer (control) got no interception, dispatcher still worked above.");
-#endif
+    return File.ReadAllText(path);
 }
 
 static string ProjectDirectory([CallerFilePath] string here = "") => Path.GetDirectoryName(here)!;
@@ -158,7 +178,7 @@ public enum ProductStatus
 
 [MapTo(typeof(ProductDto))]
 [MapCondition(typeof(ProductDto), nameof(ProductDto.InternalSku), nameof(ShouldMapInternalSku))]
-[MapUsing(typeof(ProductDto), nameof(ProductDto.DisplayPrice), nameof(FormatPrice))]
+[MapUsing(typeof(ProductDto), nameof(ProductDto.DisplayPrice), nameof(FormatPrice), InlineInProjection = true)]
 [MapDefault(typeof(ProductDto), nameof(ProductDto.Description), "No description")]
 [MapProperty(typeof(ProductDto), nameof(Status), nameof(ProductDto.StatusCode))]
 public sealed class Product

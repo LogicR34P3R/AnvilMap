@@ -22,6 +22,9 @@ internal sealed record PropertyMappingModel(
     CollectionShape DestinationCollectionShape = CollectionShape.List,
     string? ConverterMethodName = null,
     string? DefaultValueLiteral = null,
+    // Converter body text with its parameter replaced by a placeholder; null falls back to a
+    // plain method call. Set only when InlineInProjection was eligible.
+    string? InlinedConverterProjectionTemplate = null,
     // The type ConditionMethodName/ConverterMethodName is actually declared on - the source
     // type for a [MapTo]-declared mapping, but possibly the destination type for a
     // [MapFrom]-declared one. Set whenever either method name is set; MappingEmitter qualifies
