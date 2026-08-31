@@ -1,9 +1,9 @@
 # Using AnvilMap
 
-A practical guide for consumers: how to install it, what it generates, and how to call the
-generated code. For the full list of attributes and diagnostics in one place, see the
-"Mapping declaration" section of [README.md](README.md) — this guide walks through the same
-ground task-by-task instead.
+The complete reference: every attribute, every diagnostic, every edge case, task-by-task from
+installation through the deep behavioral nuances. [README.md](README.md) is the shorter landing
+page — install instructions, a quick-start example, and a feature overview that links back here
+for the details.
 
 ## Installing
 
@@ -84,9 +84,8 @@ public sealed class UserDto
 }
 ```
 
-Generates the exact same `user.ToUserDto()`. See "Declaring from the destination side" in
-[README.md](README.md#declaring-from-the-destination-side) for how the customization attributes
-below behave when placed on the DTO this way instead.
+Generates the exact same `user.ToUserDto()`. See "Customizing a mapping" below for how the
+attributes behave when placed on the DTO this way instead of on the source.
 
 ## What gets generated
 
@@ -150,7 +149,29 @@ on `UserDto` are ever selected from the database.
 
 ## Customizing a mapping
 
-All of these go on the **source** type, next to `[MapTo]` — never on the destination.
+All of these normally go on the **source** type, next to `[MapTo]`. If your mapping is declared
+the other way round, with `[MapFrom]` on the destination (see Quick start above), every one of
+`[MapProperty]`, `[MapCondition]`, `[MapUsing]`, `[MapDefault]`, and `[MapInclude]` can be placed
+there instead — the `Type` argument that normally names the destination now names the source
+instead (matching `[MapFrom]`'s own argument), and everything else, including the property-name
+arguments, keeps its usual meaning:
+
+```csharp
+[MapFrom(typeof(User))]
+[MapUsing(typeof(User), nameof(FullName), nameof(ComputeFullName))]
+public sealed class UserDto
+{
+    public string FullName { get; set; } = "";
+
+    // Lives here, not on User - it's fine for the DTO to reference User.FirstName/LastName.
+    public static string ComputeFullName(User source) => $"{source.FirstName} {source.LastName}";
+}
+```
+
+The one real difference: a `[MapCondition]`/`[MapUsing]` method is looked up on whichever type
+physically carries the attribute, so for a `[MapFrom]`-declared mapping it's expected on the
+destination (the DTO), not the source — which is the point, since the source still isn't allowed
+to know about the destination.
 
 **Rename a property** (`[MapProperty]`):
 
@@ -710,32 +731,64 @@ for any analyzer's diagnostics, `AMxxx` or otherwise.
 
 ## Native AOT
 
-Everything generated is plain C# with no runtime reflection, so it publishes and runs correctly
-under `dotnet publish -p:PublishAot=true` — verified via `samples/AnvilMap.Sample.Aot`, a
-small console app published and actually run under Native AOT. See README.md's "Native AOT"
-section for the one caveat (a trim warning tied to the SQL-projection feature specifically) and
-how the generator handles it.
+Everything the generator emits — the imperative `To{Dest}()` methods, the dispatcher, `IMapper` —
+is plain, direct C# with no reflection at runtime, so it publishes and runs correctly under Native
+AOT (`dotnet publish -p:PublishAot=true`). `AnvilMap.Abstractions`'s net8.0 target opts into
+`<IsAotCompatible>true</IsAotCompatible>`, turning on the trimmer/AOT analyzer's build-time
+warnings. `samples/AnvilMap.Sample.Aot` is a small, EF-Core-free console app that's actually
+published with `PublishAot=true` and run — including calling `.Compile()` on a generated
+projection field directly, exactly what `IQueryable.Select()` does under the hood for an in-memory
+provider — to confirm this rather than just assert it.
+
+**One caveat:** building `{Source}To{Destination}Projection` means compiling an object-initializer
+inside an `Expression<Func<...>>`, and the C# compiler does that by calling
+`Expression.Bind(MethodInfo, Expression)` under the hood. That method is marked
+`[RequiresUnreferencedCode]`, so it trips an `IL2026` trim warning — not a AnvilMap bug,
+just what happens whenever you build a member-init expression tree. It only comes up for
+destinations that actually need an object-initializer, though: if the destination's constructor
+already covers every mapped property (a positional record, say), the projection compiles to a
+plain `Expression.New(ctor, args)` and there's nothing to warn about.
+
+For the destinations where it does come up (plain mutable classes, the usual case), the generator
+handles it for you: each projection field gets assigned inside an explicit static constructor
+tagged with `[DynamicDependency(DynamicallyAccessedMemberTypes.PublicProperties, typeof(Dest))]` —
+telling the trimmer directly to keep those properties instead of hoping nothing else strips
+them — plus `[UnconditionalSuppressMessage("Trimming", "IL2026", ...)]` to clear the now-safe
+warning. If nothing in your mapping actually needs this, neither attribute shows up.
+
+Both attributes are absent below net6 (netstandard2.0 included) — emitting them unconditionally
+would break compilation for exactly those consumers, so like `FrozenDictionary` and `#nullable`/`!`
+elsewhere, this is gated by asking the consumer's own `Compilation` whether the type resolves
+(`ConsumerCapabilities.CanSuppressTrimWarnings`), not assumed from a TFM name.
 
 ## Interceptor-based dispatch (C# 14)
 
-If your project targets C# 14 (.NET 10+), a call to the generic dispatcher written directly with
-both type arguments given —
+On a consumer targeting C# 14 (.NET 10+), a call to the generic dispatcher written with both type
+arguments given explicitly —
 
 ```csharp
 UserDto dto = GeneratedMappings.Map<User, UserDto>(user);
 ```
 
-— gets rewritten by the compiler at build time to call `user.ToUserDto()` directly, skipping the
-`FrozenDictionary` lookup for that call site. Nothing to opt into: it's automatic, gated on your
-project's own toolchain the same way `FrozenDictionary`/`#nullable` support is, and requires no
-`.csproj` changes — the package configures the one MSBuild property it needs on its own.
+— that the generator can see at compile time gets redirected via a C# interceptor straight to the
+concrete `source.ToDest(...)` method, skipping the `FrozenDictionary` lookup entirely for that
+call site. Measured on a flat mapping shape: the one-arg case lands statistically tied with
+calling the extension method directly (down from ~1.7x its overhead), and the two-arg case
+(already allocation-free, since it populates an existing instance) does better still.
 
-This never applies to a call made through `IMapper` (`mapper.Map<User, UserDto>(user)`), even on
-C# 14 — that path is deliberately left untouched so injecting a mock/fake `IMapper` in tests keeps
-working exactly as before. If you're not calling `GeneratedMappings.Map<,>` directly (most code
-goes through `IMapper` or the extension methods, and doesn't need to think about this at all), this
-section doesn't change anything about how you use the library. See README.md's "Interceptor-based
-dispatch" section for the full reasoning and measured numbers.
+This never applies to `IMapper.Map<TSource,TDestination>(...)` calls, even on C# 14 — interceptors
+redirect by source *location*, not by the runtime type behind the receiver, so intercepting an
+interface-typed call would silently bypass a mocked/faked `IMapper` in tests. `IMapper` stays
+exactly as fast (and exactly as mockable) as it's always been; only a direct call naming
+`GeneratedMappings` gets the fast path. It also never applies to the type-erased
+`Map<TDestination>(object source)` overload (only the destination is statically known there) or to
+a call written with open generic type parameters from an enclosing generic method — both fall back
+to the untouched dictionary dispatch, always correctly.
+
+Nothing to opt into: this is automatic, gated per-consumer on the same dynamic-capability-detection
+pattern as `FrozenDictionary`/`#nullable` above, and the NuGet package ships a `buildTransitive`
+props file that configures the one MSBuild property (`InterceptorsNamespaces`) this needs — no
+manual `.csproj` edits required.
 
 ## What it doesn't do
 
