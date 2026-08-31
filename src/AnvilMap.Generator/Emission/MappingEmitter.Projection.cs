@@ -165,8 +165,11 @@ internal static partial class MappingEmitter
                 PropertyMappingKind.Enumerable =>
                     BuildEnumerableProjection(property, byPair, sourceExpr, visiting, destinationTypesUsingBind, report),
 
+                // Splice the converter's body in place of a call when eligible for inlining.
                 PropertyMappingKind.Converted =>
-                    $"{property.MethodHostType!.FullyQualifiedName}.{property.ConverterMethodName}({sourceExpr})",
+                    property.InlinedConverterProjectionTemplate is { } template
+                        ? template.Replace(MappingResolver.InlineConverterSourcePlaceholder, $"({sourceExpr})")
+                        : $"{property.MethodHostType!.FullyQualifiedName}.{property.ConverterMethodName}({sourceExpr})",
 
                 PropertyMappingKind.EnumConversion =>
                     $"({property.DestinationType.FullyQualifiedName}){sourceExpr}.{property.SourcePropertyName}",

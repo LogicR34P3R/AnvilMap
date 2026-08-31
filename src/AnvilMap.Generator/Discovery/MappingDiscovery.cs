@@ -159,8 +159,12 @@ internal static class MappingDiscovery
         var destinationProperty = attribute.ConstructorArguments[1].Value?.ToString();
         var converterMethod = attribute.ConstructorArguments[2].Value?.ToString();
 
+        var inlineInProjection = attribute.NamedArguments
+            .FirstOrDefault(x => x.Key == "InlineInProjection")
+            .Value.Value as bool? ?? false;
+
         return !string.IsNullOrWhiteSpace(destinationProperty) && !string.IsNullOrWhiteSpace(converterMethod)
-            ? new ExplicitConverterMapping(destinationProperty!, converterMethod!)
+            ? new ExplicitConverterMapping(destinationProperty!, converterMethod!, inlineInProjection)
             : null;
     }
 

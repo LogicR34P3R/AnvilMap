@@ -2,4 +2,5 @@ namespace AnvilMap.Generator;
 
 internal sealed record ExplicitConverterMapping(
     string DestinationProperty,
-    string ConverterMethodName);
+    string ConverterMethodName,
+    bool InlineInProjection);

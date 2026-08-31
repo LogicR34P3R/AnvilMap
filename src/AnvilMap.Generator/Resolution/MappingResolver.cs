@@ -40,7 +40,7 @@ internal static partial class MappingResolver
         var explicitConvertersGrouped = declaration.ExplicitConverters.GroupBy(x => x.DestinationProperty).ToArray();
         ReportDuplicates(explicitConvertersGrouped, "[MapUsing]", declaration.MethodHostSymbol, destination, report);
         var explicitConverters = explicitConvertersGrouped
-            .ToDictionary(g => g.Key, g => g.Last().ConverterMethodName);
+            .ToDictionary(g => g.Key, g => g.Last());
 
         var explicitDefaultsGrouped = declaration.ExplicitDefaults.GroupBy(x => x.DestinationProperty).ToArray();
         ReportDuplicates(explicitDefaultsGrouped, "[MapDefault]", declaration.MethodHostSymbol, destination, report);
@@ -120,9 +120,9 @@ internal static partial class MappingResolver
                 continue;
             }
 
-            if (explicitConverters.TryGetValue(destinationProperty.Name, out var converterMethodName))
+            if (explicitConverters.TryGetValue(destinationProperty.Name, out var explicitConverter))
             {
-                var converter = ResolveConverter(compilation, declaration.MethodHostSymbol, source, destinationProperty, converterMethodName, report);
+                var converter = ResolveConverter(compilation, declaration.MethodHostSymbol, source, destinationProperty, explicitConverter.ConverterMethodName, report);
 
                 if (converter is null)
                 {
@@ -157,6 +157,10 @@ internal static partial class MappingResolver
                     destinationProperty, PropertyMappingKind.Converted, destinationProperty.Type,
                     explicitDefaults, source, destination, report);
 
+                var inlinedProjectionTemplate = explicitConverter.InlineInProjection
+                    ? TryInlineConverterForProjection(compilation, converter, destinationProperty, source, destination, report)
+                    : null;
+
                 properties.Add(new PropertyMappingModel(
                     string.Empty,
                     destinationProperty.Name,
@@ -167,9 +171,10 @@ internal static partial class MappingResolver
                     ConditionAcceptsDestination: converterCondition.AcceptsDestination,
                     DestinationIsInitOnly: destinationProperty.SetMethod!.IsInitOnly,
                     DestinationIsRequired: destinationProperty.IsRequired,
-                    ConverterMethodName: converter,
+                    ConverterMethodName: converter.Name,
                     DefaultValueLiteral: converterDefault,
-                    MethodHostType: TypeModel.From(declaration.MethodHostSymbol)));
+                    MethodHostType: TypeModel.From(declaration.MethodHostSymbol),
+                    InlinedConverterProjectionTemplate: inlinedProjectionTemplate));
 
                 continue;
             }

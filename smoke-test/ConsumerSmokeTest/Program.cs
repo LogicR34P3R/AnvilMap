@@ -1,5 +1,3 @@
-using System.Collections.Immutable;
-using System.Collections.ObjectModel;
 using System.Runtime.CompilerServices;
 using AnvilMap;
 
@@ -71,9 +69,13 @@ Check(new Animal { Name = "Generic" }.ToAnimalDto() is AnimalDto and not DogDto,
 Check(GeneratedMappings.Map<AnimalDto>((object)dog) is DogDto { Breed: "Labrador" }, "[MapInclude] via generic dispatcher (runtime-type-keyed)");
 Check(mapper.Map<Animal, AnimalDto>(dog) is DogDto { Breed: "Labrador" }, "[MapInclude] via IMapper");
 
+var compiledProductProjection = GeneratedMappings.ProductToProductDtoProjection.Compile()(product);
+Check(compiledProductProjection.DisplayPrice == "$20.00", "[MapUsing] InlineInProjection - compiled projection expression");
+
 Console.WriteLine("Smoke test passed: AnvilMap.Generator + AnvilMap.Abstractions work correctly from packed NuGet packages.");
 
 VerifyInterceptors();
+VerifyInlineProjection();
 
 static void Check(bool condition, string what)
 {
@@ -84,6 +86,32 @@ static void Check(bool condition, string what)
 }
 
 static void VerifyInterceptors()
+{
+    var text = ReadGeneratedMappingsSource();
+
+#if NET10_0_OR_GREATER
+    Check(text.Contains("InterceptsLocation("), "Interceptor emitted on a C# 14 (net10.0) consumer");
+    Check(text.Contains("class Interceptors"), "Interceptor container class emitted on a C# 14 (net10.0) consumer");
+    Console.WriteLine("Interceptor smoke test passed: net10.0 consumer got real [InterceptsLocation] redirects.");
+#else
+    Check(!text.Contains("InterceptsLocation"), "No interceptor on a pre-C#14 (net8.0) consumer");
+    Check(!text.Contains("class Interceptors"), "No interceptor container class on a pre-C#14 (net8.0) consumer");
+    Console.WriteLine("Interceptor smoke test passed: net8.0 consumer (control) got no interception, dispatcher still worked above.");
+#endif
+}
+
+static void VerifyInlineProjection()
+{
+    var text = ReadGeneratedMappingsSource();
+    var projectionLine = text.Split('\n').FirstOrDefault(l => l.Contains("ProductToProductDtoProjection ="));
+
+    Check(projectionLine is not null, "Projection field initializer for Product -> ProductDto exists");
+    Check(!projectionLine!.Contains("FormatPrice("), "InlineInProjection spliced the converter body instead of calling it");
+    Check(projectionLine.Contains("(source).Price.ToString(\"F2\""), "Inlined converter body is present in the projection");
+    Console.WriteLine("Inline-projection smoke test passed: [MapUsing] InlineInProjection spliced into the real generated projection.");
+}
+
+static string ReadGeneratedMappingsSource()
 {
     var path = Path.Combine(
         ProjectDirectory(),
@@ -102,140 +130,7 @@ static void VerifyInterceptors()
         throw new InvalidOperationException($"Smoke test failed: expected the real generated file at {path}.");
     }
 
-    var text = File.ReadAllText(path);
-
-#if NET10_0_OR_GREATER
-    Check(text.Contains("InterceptsLocation("), "Interceptor emitted on a C# 14 (net10.0) consumer");
-    Check(text.Contains("class Interceptors"), "Interceptor container class emitted on a C# 14 (net10.0) consumer");
-    Console.WriteLine("Interceptor smoke test passed: net10.0 consumer got real [InterceptsLocation] redirects.");
-#else
-    Check(!text.Contains("InterceptsLocation"), "No interceptor on a pre-C#14 (net8.0) consumer");
-    Check(!text.Contains("class Interceptors"), "No interceptor container class on a pre-C#14 (net8.0) consumer");
-    Console.WriteLine("Interceptor smoke test passed: net8.0 consumer (control) got no interception, dispatcher still worked above.");
-#endif
+    return File.ReadAllText(path);
 }
 
 static string ProjectDirectory([CallerFilePath] string here = "") => Path.GetDirectoryName(here)!;
-
-[MapTo(typeof(UserDto), GenerateReverse = true)]
-public sealed class User
-{
-    public int Id { get; set; }
-    public string Name { get; set; } = "";
-}
-
-public sealed class UserDto
-{
-    public int Id { get; set; }
-    public string Name { get; set; } = "";
-}
-
-[MapTo(typeof(EmployeeDto))]
-[MapProperty(typeof(EmployeeDto), "Address.City", nameof(EmployeeDto.HomeCity))]
-public sealed class Employee
-{
-    public string Name { get; set; } = "";
-    public Address Address { get; set; } = new();
-}
-
-public sealed class Address
-{
-    public string City { get; set; } = "";
-}
-
-public sealed class EmployeeDto
-{
-    public string Name { get; set; } = "";
-    public string HomeCity { get; set; } = "";
-}
-
-public enum ProductStatus
-{
-    Draft,
-    Active,
-    Discontinued
-}
-
-[MapTo(typeof(ProductDto))]
-[MapCondition(typeof(ProductDto), nameof(ProductDto.InternalSku), nameof(ShouldMapInternalSku))]
-[MapUsing(typeof(ProductDto), nameof(ProductDto.DisplayPrice), nameof(FormatPrice))]
-[MapDefault(typeof(ProductDto), nameof(ProductDto.Description), "No description")]
-[MapProperty(typeof(ProductDto), nameof(Status), nameof(ProductDto.StatusCode))]
-public sealed class Product
-{
-    public string Name { get; set; } = "";
-    public decimal Price { get; set; }
-    public string? Description { get; set; }
-    public bool IsInternal { get; set; }
-    public string InternalSku { get; set; } = "";
-    public ProductStatus Status { get; set; }
-    public List<string> Tags { get; set; } = new();
-    public List<int> RelatedIds { get; set; } = new();
-    public List<string> RecentChanges { get; set; } = new();
-
-    public static bool ShouldMapInternalSku(Product source) => source.IsInternal;
-
-    public static string FormatPrice(Product source) => "$" + source.Price.ToString("F2", System.Globalization.CultureInfo.InvariantCulture);
-}
-
-public sealed class ProductDto
-{
-    public string Name { get; set; } = "";
-    public string DisplayPrice { get; set; } = "";
-    public string Description { get; set; } = "";
-    public string InternalSku { get; set; } = "";
-    public string Status { get; set; } = "";
-    public int StatusCode { get; set; }
-    public HashSet<string> Tags { get; set; } = new();
-    public ImmutableArray<int> RelatedIds { get; set; } = ImmutableArray<int>.Empty;
-    public ObservableCollection<string> RecentChanges { get; set; } = new();
-}
-
-public sealed class Coordinates
-{
-    public double Lat { get; set; }
-    public double Lng { get; set; }
-}
-
-[MapFrom(typeof(Coordinates))]
-public sealed class CoordinatesDto
-{
-    public double Lat { get; set; }
-    public double Lng { get; set; }
-}
-
-[MapTo(typeof(CategoryDto), MaxDepth = 2)]
-public sealed class Category
-{
-    public string Name { get; set; } = "";
-    public List<Category> Children { get; set; } = new();
-}
-
-public sealed class CategoryDto
-{
-    public string Name { get; set; } = "";
-    public List<CategoryDto> Children { get; set; } = new();
-}
-
-[MapTo(typeof(AnimalDto))]
-[MapInclude(typeof(AnimalDto), typeof(Dog), typeof(DogDto))]
-public class Animal
-{
-    public string Name { get; set; } = "";
-}
-
-[MapTo(typeof(DogDto))]
-public sealed class Dog : Animal
-{
-    public string Breed { get; set; } = "";
-}
-
-public class AnimalDto
-{
-    public string Name { get; set; } = "";
-}
-
-public sealed class DogDto : AnimalDto
-{
-    public string Breed { get; set; } = "";
-}

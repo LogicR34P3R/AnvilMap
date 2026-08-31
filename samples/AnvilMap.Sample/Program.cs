@@ -98,14 +98,16 @@ foreach (var post in projectedBlogs.SelectMany(b => b.Posts))
 Console.WriteLine();
 
 var summary = entity.Posts.First().ToPostSummaryDto();
-Console.WriteLine($"[imperative] positional record: PostSummaryDto({summary.Id}, '{summary.Headline}', {summary.StatusCode})");
+Console.WriteLine($"[imperative] positional record: PostSummaryDto({summary.Id}, '{summary.Headline}', {summary.StatusCode}, HeadlineLength={summary.HeadlineLength})");
 
+// HeadlineLength is computed via [MapUsing(..., InlineInProjection = true)] on Post - the SQL
+// below shows the converter's own body (source.Headline.Length) translated in place, not called.
 var projectedSummaries = db.Posts.ProjectToPostSummaryDto().ToList();
-Console.WriteLine("Generated SQL for ProjectToPostSummaryDto():");
+Console.WriteLine("Generated SQL for ProjectToPostSummaryDto() (note HeadlineLength is inlined, not a call):");
 Console.WriteLine(db.Posts.ProjectToPostSummaryDto().ToQueryString());
 foreach (var s in projectedSummaries)
 {
-    Console.WriteLine($"[projection] PostSummaryDto({s.Id}, '{s.Headline}', {s.StatusCode})");
+    Console.WriteLine($"[projection] PostSummaryDto({s.Id}, '{s.Headline}', {s.StatusCode}, HeadlineLength={s.HeadlineLength})");
 }
 
 Console.WriteLine();

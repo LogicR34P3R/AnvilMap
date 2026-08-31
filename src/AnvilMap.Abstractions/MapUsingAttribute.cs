@@ -42,4 +42,12 @@ public sealed class MapUsingAttribute : Attribute
     /// the decorated source type, that computes <see cref="DestinationProperty"/>'s value.
     /// </summary>
     public string ConverterMethod { get; }
+
+    /// <summary>
+    /// Opt-in: splice this converter's body into <c>.ProjectTo{Dest}()</c> instead of calling it,
+    /// so the query provider can translate the logic directly. Only eligible when
+    /// <see cref="ConverterMethod"/>'s body is a single expression; otherwise falls back to a
+    /// method call, with an <c>AM030</c> diagnostic explaining why. False by default.
+    /// </summary>
+    public bool InlineInProjection { get; set; }
 }

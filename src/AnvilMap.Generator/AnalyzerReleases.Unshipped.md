@@ -13,3 +13,4 @@ AM026 | AnvilMap | Error | [MapInclude] derived pair has no mapping of its own
 AM027 | AnvilMap | Info | Two-argument mapper omitted for a polymorphic [MapInclude] mapping
 AM028 | AnvilMap | Info | SQL projection not generated for a polymorphic [MapInclude] mapping
 AM029 | AnvilMap | Warning | Duplicate [MapInclude] for the same derived source type
+AM030 | AnvilMap | Warning | [MapUsing] InlineInProjection couldn't inline the converter's body

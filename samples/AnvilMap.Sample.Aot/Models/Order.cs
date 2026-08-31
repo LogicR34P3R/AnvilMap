@@ -4,7 +4,7 @@ namespace AnvilMap.Sample.Aot.Models;
 
 [MapTo(typeof(OrderDto))]
 [MapCondition(typeof(OrderDto), nameof(OrderDto.InternalNotes), nameof(ShouldMapInternalNotes))]
-[MapUsing(typeof(OrderDto), nameof(OrderDto.Total), nameof(ComputeTotal))]
+[MapUsing(typeof(OrderDto), nameof(OrderDto.Total), nameof(ComputeTotal), InlineInProjection = true)]
 [MapProperty(typeof(OrderDto), "Customer.Email", nameof(OrderDto.CustomerEmail))]
 [MapProperty(typeof(OrderDto), nameof(Status), nameof(OrderDto.StatusCode))]
 [MapDefault(typeof(OrderDto), nameof(OrderDto.PromoCode), "NONE")]

@@ -7,6 +7,7 @@ namespace AnvilMap.Sample.Entities;
 [MapDefault(typeof(PostDto), nameof(PostDto.Subtitle), "Untitled")]
 [MapTo(typeof(PostSummaryDto))]
 [MapProperty(typeof(PostSummaryDto), nameof(Status), nameof(PostSummaryDto.StatusCode))]
+[MapUsing(typeof(PostSummaryDto), nameof(PostSummaryDto.HeadlineLength), nameof(ComputeHeadlineLength), InlineInProjection = true)]
 public sealed class Post
 {
     public int Id { get; set; }
@@ -23,4 +24,8 @@ public sealed class Post
     public PostAuthor Author { get; set; } = new();
 
     public static bool ShouldMapBody(Post source) => source.Status != PostStatus.Draft;
+
+    // Single-expression, so InlineInProjection above splices it into the SQL projection
+    // (EF Core's Sqlite provider translates .Length to length(...)) instead of calling it.
+    public static int ComputeHeadlineLength(Post source) => source.Headline.Length;
 }

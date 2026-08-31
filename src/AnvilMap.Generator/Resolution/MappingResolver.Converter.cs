@@ -15,7 +15,7 @@ internal static partial class MappingResolver
     // Prefers an exact return-type match, falling back to an implicit conversion. The method
     // itself is looked up on methodHost, but its parameter type must still be exactly source -
     // methodHost only decides *where* the method may be declared, not what it's shaped like.
-    private static string? ResolveConverter(
+    private static IMethodSymbol? ResolveConverter(
         Compilation compilation,
         INamedTypeSymbol methodHost,
         INamedTypeSymbol source,
@@ -41,7 +41,7 @@ internal static partial class MappingResolver
 
         if (match is not null)
         {
-            return converterMethodName;
+            return match;
         }
 
         report?.Invoke(Diagnostic.Create(

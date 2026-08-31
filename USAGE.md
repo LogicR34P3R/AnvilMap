@@ -254,11 +254,32 @@ public sealed class User
 }
 ```
 
-Unlike `[MapCondition]`, this *is* honored in SQL projections — the call is inlined as-is, so
-it's your responsibility to keep the method translatable by your LINQ provider (simple
-expressions like string interpolation over other mapped properties are fine; anything the
-provider can't translate will fail at query-execution time, the same as writing `.Select()` by
-hand).
+Unlike `[MapCondition]`, this *is* honored in SQL projections — by default as a method call
+(`Entity.ComputeFullName(source)`), so it's your responsibility to keep the method translatable
+by your LINQ provider (simple expressions like string interpolation over other mapped properties
+are fine; anything the provider can't translate will fail at query-execution time, the same as
+writing `.Select()` by hand).
+
+**`InlineInProjection` splices the converter's own body into the projection instead of calling
+it**, so the query provider's translator can see into the logic directly instead of hitting an
+opaque call it may or may not recognize:
+
+```csharp
+[MapUsing(typeof(UserDto), nameof(UserDto.FullName), nameof(ComputeFullName), InlineInProjection = true)]
+```
+
+Only eligible when `ComputeFullName`'s body is a single expression — an expression-bodied member
+(`=> ...;`), or a block with exactly one `return` statement. Anything else (locals, branching,
+loops, multiple statements) — along with a handful of narrower cases this generator isn't
+confident it can rewrite correctly (a `nameof(...)` inside the body, a reference to a generic
+type/method, or a reference to a `private`/`protected` member that wouldn't be reachable from the
+generated file) — falls back to the ordinary method-call emission, with an `AM030` diagnostic
+explaining why. False by default: silently changing an existing converter's projection behavior
+could be surprising (e.g. one intentionally relying on the opaque-call shape for an EF Core
+`[DbFunction]`-mapped method). Note that inlining only removes *this* opacity layer — a spliced
+expression that itself needs `.ToImmutableArray()`/`new ObservableCollection<T>(...)` internally
+is no more translatable inlined than it was as a call, so this doesn't rescue `AM022`/`AM023`'s
+own excluded cases.
 
 **Substitute a default when the value would be null** (`[MapDefault]`):
 
@@ -313,10 +334,10 @@ excluded from `.ProjectTo{Dest}()` with `AM023`, since they aren't confirmed tra
 query providers the way `List<T>`/`T[]`/`HashSet<T>` are. A destination collection shape this
 generator doesn't recognize (and that `List<T>` doesn't already implicitly convert to) reports
 `AM003` instead of emitting code that wouldn't compile. Note that a `[MapUsing]` override doesn't
-rescue this the way it does for `AM022` (below): AnvilMap emits `[MapUsing]` as a method call in
-the projection, which EF Core's translator can't see into regardless of what the method's body
-does — wrapping `.ToImmutableArray()`/`new ObservableCollection<T>(...)` in your own converter
-doesn't make it any more translatable than the automatic version.
+rescue this the way it does for `AM022` (below) — not even with `InlineInProjection` (above):
+wrapping `.ToImmutableArray()`/`new ObservableCollection<T>(...)` in your own converter doesn't
+make it any more translatable than the automatic version, whether it's called as a method or
+spliced inline.
 
 ## Naming-convention flattening
 
@@ -666,6 +687,7 @@ The generator reports build-time diagnostics instead of failing silently or thro
 | AM027 | Info | The two-argument `To{Dest}(source, destination)` overload was omitted because it's a polymorphic `[MapInclude]` mapping. |
 | AM028 | Info | The SQL projection was skipped because it's a polymorphic `[MapInclude]` mapping — a runtime type-switch can't be expressed as a translatable expression. |
 | AM029 | Warning | The same derived source type is named by more than one `[MapInclude]` on this mapping — only the last one is used. |
+| AM030 | Warning | A `[MapUsing]`'s `InlineInProjection = true` couldn't inline the converter's body (not a single expression, or it references something that can't be safely inlined) — the projection falls back to a method call instead. |
 
 AM001, AM004, and AM009 have one-click IDE code fixes, included automatically alongside the
 generator itself — no separate package reference needed.
