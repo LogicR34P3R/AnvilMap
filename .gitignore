@@ -26,6 +26,10 @@ nupkg-out/
 # Internal planning docs - not part of the published/public surface
 docs/
 
+# Throwaway/regression investigation harnesses (this project's own tools/ convention) - built and
+# run locally, never part of the shipped solution or CI
+tools/
+
 # OS cruft
 .DS_Store
 Thumbs.db
