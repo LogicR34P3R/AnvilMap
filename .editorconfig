@@ -4,3 +4,9 @@ root = true
 # Always use block braces for if/else/for/foreach/while/using, even for single statements.
 csharp_prefer_braces = true:warning
 dotnet_diagnostic.IDE0005.severity = warning
+
+# AnvilMap.Generator's Discovery/Resolution/Emission/Models subfolders organize files for
+# navigation only - every type in that internal-only generator assembly deliberately shares one
+# flat AnvilMap.Generator namespace, so callers never need a `using AnvilMap.Generator.Discovery;`
+# etc. sprinkled around code that already references types from every folder together.
+dotnet_diagnostic.IDE0130.severity = none
